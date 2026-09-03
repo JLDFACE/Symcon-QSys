@@ -95,25 +95,42 @@ Repository erneut hinzufügen.
 
 ## Tests
 
-Lokaler Harness ohne Symcon (nur `php` nötig) — stubbt die Symcon-API, lädt die
-echte Core-Klasse und treibt sie mit realen QRC-Frames:
+### Offline (ohne Symcon, ohne Hardware)
+Stubbt die Symcon-API, laedt die echte Core-Klasse und treibt sie mit realen
+QRC-Frames:
 
 ```bash
 php tests/qrc_test.php
 ```
 
-Geprüft werden Framing/Buffering, Dispatch (Poll → Fan-out, StatusGet, Component.Get),
-Change-Normalisierung, ChangeGroup-/AutoPoll-Aufbau und der Forward-Pfad.
-Stand: 22 Prüfungen, 0 Fehler.
+Geprueft werden Framing/Buffering, Dispatch (Poll -> Fan-out, StatusGet,
+Component.Get), Change-Normalisierung, ChangeGroup-/AutoPoll-Aufbau und der
+Forward-Pfad. Stand: **26 Pruefungen, 0 Fehler**.
 
-### Verifikation gegen einen Core
-Ohne Hardware genügt der **Q-SYS Designer im Emulate-Modus** (QRC auf
-`localhost:1710`): Named Components mit Script Access anlegen, Core-Instanz auf
-den Host zeigen — `Status`/`Design` müssen erscheinen; Configurator öffnen →
-Komponentenliste; Gain-Instanz anlegen, Fader bewegen und im Designer gegenprüfen;
-im Designer einen Wert ändern → Push landet in Symcon.
+### Gegen einen echten Core -- lesend
+```bash
+php tests/live_core_test.php [host] [port]     # Default: core-demo 1710
+```
 
----
+Faehrt die echte Core-Klasse an einem echten Socket: Begruessung
+(`EngineStatus`), `StatusGet`, Abo -> ChangeGroup -> Push-Fan-out, Erst-Sync und
+das **NoOp-Keepalive ueber 65 s** (der Core trennt sonst nach 60 s). Schreibt
+nichts. Laeuft rund 80 s. Stand: **12 Pruefungen, 0 Fehler**.
+
+### Gegen einen echten Core -- schreibend
+```bash
+php tests/live_write_test.php [host] [port]
+```
+
+Treibt die echten Kindmodule ueber den echten Core: `Component.Set` mit `Value`,
+`Position` und `Ramp`, Mute, der generische Control-Pfad, die Router-Umschaltung
+und ein Trigger. **Veraendert Werte am Core** -- liest dafuer alle Ausgangswerte
+vorher ein und stellt sie am Ende wieder her, auch bei Abbruch. Snapshots bleiben
+unangetastet. Die Komponentennamen im Skript stammen aus dem Testdesign und
+muessen fuer ein anderes Design angepasst werden. Stand: **10 Pruefungen, 0 Fehler**.
+
+Verifiziert gegen einen **Core 24f**, Design `SKUZ_FACE_190826`, 142 Named
+Components / 4259 Controls.
 
 ## Autor
 
