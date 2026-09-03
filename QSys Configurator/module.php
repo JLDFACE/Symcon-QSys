@@ -189,8 +189,10 @@ class QSysConfigurator extends IPSModule
 
             $values[] = $this->ComponentRow($compRowId, $cName, $cType, $list);
 
+            // Die Obergrenze darf nur die Controls kappen -- die Komponentenliste
+            // muss vollstaendig bleiben, sonst fehlen anlegbare Komponenten.
             $wanted = $showAll || ($filter !== '' && stripos($cName, $filter) !== false);
-            if (!$wanted) {
+            if (!$wanted || $limitHit) {
                 $skipped += count($list);
                 continue;
             }
@@ -201,7 +203,7 @@ class QSysConfigurator extends IPSModule
                 }
                 if ($ctrlRows >= self::MAX_CONTROL_ROWS) {
                     $limitHit = true;
-                    break 2;
+                    break;
                 }
                 $values[] = $this->ControlRow($compRowId, $cName, $ctrl);
                 $ctrlRows++;
