@@ -109,6 +109,19 @@ class QSysEQ extends IPSModule
             $this->EnableAction($i);
         }
 
+        // MaintainVariable setzt den Namen nur beim Anlegen. Umbenennungen im
+        // Modul kaemen sonst bei bestehenden Instanzen nie an.
+        foreach (array(
+            'Curve' => 'Frequenzgang', 'Band' => 'Band', 'Frequency' => 'Frequenz',
+            'Gain' => 'Gain', 'Q' => 'Q', 'Bypass' => 'Bypass',
+            'MasterGain' => 'Master-Gain', 'EQBypass' => 'EQ Bypass', 'Mute' => 'Stumm'
+        ) as $ident => $name) {
+            $vid = @$this->GetIDForIdent($ident);
+            if ($vid !== false && $vid > 0 && IPS_GetName($vid) !== $name) {
+                IPS_SetName($vid, $name);
+            }
+        }
+
         // WebHook fuer IPSView bereitstellen
         $this->RegisterHook();
 
