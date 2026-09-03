@@ -21,11 +21,17 @@ class QSysConfigurator extends IPSModule
     const GUID_ROUTER     = '{206CCE6E-A80E-4032-AB12-7C060823FD2D}';
     const GUID_SNAPSHOT   = '{BD1426DA-330A-46B7-BA7D-F6CE5C7E627F}';
 
+    // Obergrenze fuer Control-Zeilen im Formular. Symcon bricht die Ausgabe bei
+    // 1 MB ab; ~4400 Zeilen reissen das sicher, 800 bleiben deutlich darunter.
+    const MAX_CONTROL_ROWS = 800;
+
     public function Create()
     {
         parent::Create();
         $this->ConnectParent(self::CORE_GUID);
         $this->RegisterPropertyInteger('TimeoutMs', 2000);
+        $this->RegisterPropertyString('ControlFilter', '');
+        $this->RegisterPropertyBoolean('ShowAllControls', false);
     }
 
     public function ApplyChanges()
@@ -40,6 +46,23 @@ class QSysConfigurator extends IPSModule
             array(
                 'type' => 'Label',
                 'caption' => 'Liest die Named Components des verbundenen Q-SYS Core aus. Voraussetzung: die Komponenten sind im Designer auf "Script Access = All/External" gesetzt.'
+            ),
+            array(
+                'type' => 'Label',
+                'caption' => 'Komponenten werden immer gelistet. Einzelne Controls erscheinen erst, '
+                    . 'wenn unten ein Filter gesetzt ist — ein grosses Design hat mehrere tausend '
+                    . 'Controls und wuerde das Formular sprengen. Nach dem Aendern eines Feldes '
+                    . '"Aenderungen uebernehmen" druecken.'
+            ),
+            array(
+                'type' => 'ValidationTextBox',
+                'name' => 'ControlFilter',
+                'caption' => 'Controls anzeigen fuer Komponenten mit (Namensteil)'
+            ),
+            array(
+                'type' => 'CheckBox',
+                'name' => 'ShowAllControls',
+                'caption' => 'Controls aller Komponenten anzeigen (nur bei kleinen Designs)'
             ),
             array(
                 'type' => 'NumberSpinner',
@@ -137,7 +160,19 @@ class QSysConfigurator extends IPSModule
             return array($this->InfoRow('Keine Komponentenliste erhalten. Sind Named Components mit Script Access angelegt?'));
         }
 
+        // Ein reales Design sprengt sonst das Formular: SKUZ_FACE_190826 hat 142
+        // Komponenten mit zusammen 4259 Controls ("Matrix Saal" allein 693). Alle
+        // als Zeilen ausgegeben, laeuft Symcon in "Output-Buffer exceeds Limit
+        // (1048576 bytes)" und der Configurator zeigt gar nichts mehr.
+        // Deshalb: Komponenten immer, Controls nur gefiltert und mit Obergrenze.
+        $filter = trim((string) $this->ReadPropertyString('ControlFilter'));
+        $showAll = (bool) $this->ReadPropertyBoolean('ShowAllControls');
+
         $values = array();
+        $ctrlRows = 0;
+        $limitHit = false;
+        $skipped = 0;
+
         foreach ($components as $comp) {
             if (!isset($comp['Name'])) {
                 continue;
@@ -146,24 +181,47 @@ class QSysConfigurator extends IPSModule
             $cType = isset($comp['Type']) ? (string) $comp['Type'] : '';
             $compRowId = crc32('C:' . $cName) & 0x7fffffff;
 
-            // Controls zuerst holen: der Core meldet dort ValueMin/ValueMax, damit
-            // laesst sich z. B. der dB-Bereich einer Gain-Komponente vorbelegen.
+            // Controls immer holen: der Core meldet dort ValueMin/ValueMax und die
+            // label.N eines Selectors -- daraus werden Gain-Bereich und Quellenliste
+            // vorbelegt. Die Abfrage ist billig, nur die Ausgabe muss begrenzt werden.
             $ctrls = $this->QrcRequest($client, 'Component.GetControls', array('Name' => $cName));
             $list = (is_array($ctrls) && isset($ctrls['Controls']) && is_array($ctrls['Controls'])) ? $ctrls['Controls'] : array();
 
             $values[] = $this->ComponentRow($compRowId, $cName, $cType, $list);
 
+            $wanted = $showAll || ($filter !== '' && stripos($cName, $filter) !== false);
+            if (!$wanted) {
+                $skipped += count($list);
+                continue;
+            }
+
             foreach ($list as $ctrl) {
                 if (!isset($ctrl['Name'])) {
                     continue;
                 }
+                if ($ctrlRows >= self::MAX_CONTROL_ROWS) {
+                    $limitHit = true;
+                    break 2;
+                }
                 $values[] = $this->ControlRow($compRowId, $cName, $ctrl);
+                $ctrlRows++;
             }
         }
         @fclose($client);
 
         if (count($values) === 0) {
             return array($this->InfoRow('Es wurden keine Named Components gefunden.'));
+        }
+
+        if ($limitHit) {
+            array_unshift($values, $this->InfoRow(
+                'Anzeige bei ' . self::MAX_CONTROL_ROWS . ' Controls abgeschnitten. '
+                . 'Filter enger setzen, um gezielt an die restlichen Controls zu kommen.'));
+        } elseif ($ctrlRows === 0 && $skipped > 0) {
+            array_unshift($values, $this->InfoRow(
+                $skipped . ' Controls ausgeblendet. Komponenten lassen sich direkt anlegen; '
+                . 'fuer einzelne Controls oben einen Komponenten-Filter eintragen '
+                . 'und Aenderungen uebernehmen.'));
         }
         return $values;
     }
