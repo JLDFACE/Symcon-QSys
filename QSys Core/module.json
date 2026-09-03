@@ -1,0 +1,11 @@
+{
+  "id": "{2D09E300-AB56-4A99-8734-580E05BDC5E0}",
+  "name": "QSys Core",
+  "aliases": ["Q-SYS Core", "QSC Core", "QRC"],
+  "type": 2,
+  "vendor": "FACE GmbH",
+  "parentRequirements": ["{79827379-F36E-4ADA-8A95-5F8D1DC92FA9}"],
+  "childRequirements": ["{A322AA34-4023-435D-B023-1BD80BAB9E22}"],
+  "implemented": ["{018EF6B5-AB94-40C6-AA53-46943E824ACF}", "{747545EE-CA0F-490F-8F42-6D240F6CAEB4}"],
+  "prefix": "QSYS"
+}

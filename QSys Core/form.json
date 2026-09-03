@@ -1,0 +1,71 @@
+{
+    "elements": [
+        {
+            "type": "Label",
+            "caption": "Verbindung zum Q-SYS Core über QRC (TCP-Port 1710). Der Port wird an der übergeordneten Client-Socket-Instanz automatisch auf 1710 gesetzt, sofern noch keiner eingetragen ist."
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "Anmeldung (optional)",
+            "expanded": false,
+            "items": [
+                {
+                    "type": "Label",
+                    "caption": "Nur ausfüllen, wenn der Core eine PIN/Benutzerverwaltung für externe Steuerung verlangt. Leer lassen = kein Logon."
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "User",
+                    "caption": "Benutzer"
+                },
+                {
+                    "type": "PasswordTextBox",
+                    "name": "Password",
+                    "caption": "Passwort / PIN"
+                }
+            ]
+        },
+        {
+            "type": "NumberSpinner",
+            "name": "PollRate",
+            "caption": "Push-Rate (ChangeGroup AutoPoll)",
+            "suffix": " s",
+            "minimum": 1,
+            "maximum": 60
+        }
+    ],
+    "actions": [
+        {
+            "type": "Button",
+            "caption": "Status jetzt abfragen",
+            "onClick": "QSYS_RequestStatus($id);"
+        },
+        {
+            "type": "RowLayout",
+            "items": [
+                {
+                    "type": "ValidationTextBox",
+                    "name": "DbgMethod",
+                    "caption": "QRC-Methode",
+                    "value": "StatusGet"
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "DbgParams",
+                    "caption": "Parameter (JSON)",
+                    "value": "0"
+                },
+                {
+                    "type": "Button",
+                    "caption": "Senden",
+                    "onClick": "QSYS_RawRequest($id, $DbgMethod, $DbgParams);"
+                }
+            ]
+        }
+    ],
+    "status": [
+        { "code": 102, "icon": "active", "caption": "Verbunden" },
+        { "code": 104, "icon": "inactive", "caption": "Verbindung inaktiv" },
+        { "code": 201, "icon": "error", "caption": "Verbindung abgelehnt (Port geschlossen?)" }
+    ]
+}

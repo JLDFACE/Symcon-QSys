@@ -1,0 +1,12 @@
+{
+  "id": "{983498B0-2702-41FF-BDA4-AB46D29265B6}",
+  "author": "FACE GmbH",
+  "name": "QSys Control",
+  "url": "https://github.com/JLDFACE/Symcon-QSys",
+  "compatibility": {
+    "version": "7.0"
+  },
+  "version": "1.0",
+  "build": 1,
+  "date": 1755043200
+}

@@ -1,0 +1,11 @@
+{
+  "id": "{D7F2AAA3-0102-4A08-834C-91E7758F8744}",
+  "name": "QSys Gain",
+  "aliases": ["Q-SYS Gain", "Lautstärke"],
+  "type": 3,
+  "vendor": "FACE GmbH",
+  "parentRequirements": ["{747545EE-CA0F-490F-8F42-6D240F6CAEB4}"],
+  "childRequirements": [],
+  "implemented": ["{A322AA34-4023-435D-B023-1BD80BAB9E22}"],
+  "prefix": "QSYS"
+}

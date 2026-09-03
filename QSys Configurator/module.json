@@ -1,0 +1,11 @@
+{
+  "id": "{CA48AA66-34C5-45B0-B205-158AA930CCB1}",
+  "name": "QSys Configurator",
+  "aliases": ["Q-SYS Configurator"],
+  "type": 4,
+  "vendor": "FACE GmbH",
+  "parentRequirements": ["{747545EE-CA0F-490F-8F42-6D240F6CAEB4}"],
+  "childRequirements": [],
+  "implemented": ["{A322AA34-4023-435D-B023-1BD80BAB9E22}"],
+  "prefix": "QSYS"
+}

@@ -1,0 +1,54 @@
+{
+    "elements": [
+        {
+            "type": "Label",
+            "caption": "Lädt/speichert Snapshots einer Snapshot-Bank. Der Bankname entspricht dem Namen im Q-SYS Designer."
+        },
+        {
+            "type": "ValidationTextBox",
+            "name": "BankName",
+            "caption": "Snapshot-Bank (Name)"
+        },
+        {
+            "type": "RowLayout",
+            "items": [
+                {
+                    "type": "NumberSpinner",
+                    "name": "Count",
+                    "caption": "Anzahl Snapshots",
+                    "minimum": 1,
+                    "maximum": 64
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Ramp",
+                    "caption": "Ramp (Überblendzeit)",
+                    "digits": 2,
+                    "suffix": " s",
+                    "minimum": 0,
+                    "maximum": 60
+                }
+            ]
+        }
+    ],
+    "actions": [
+        {
+            "type": "RowLayout",
+            "items": [
+                {
+                    "type": "NumberSpinner",
+                    "name": "SaveNr",
+                    "caption": "Nummer",
+                    "minimum": 1,
+                    "maximum": 64
+                },
+                {
+                    "type": "Button",
+                    "caption": "Aktuellen Zustand speichern",
+                    "onClick": "QSYS_SaveSnapshot($id, $SaveNr);"
+                }
+            ]
+        }
+    ],
+    "status": []
+}

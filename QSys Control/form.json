@@ -1,0 +1,60 @@
+{
+    "elements": [
+        {
+            "type": "Label",
+            "caption": "Bindet eine Variable an ein Q-SYS-Control. Komponente leer lassen = Named Control (Control.Set), sonst Component-Control der genannten Komponente."
+        },
+        {
+            "type": "ValidationTextBox",
+            "name": "ComponentName",
+            "caption": "Komponente (Named Component, optional)"
+        },
+        {
+            "type": "ValidationTextBox",
+            "name": "ControlName",
+            "caption": "Control-Name"
+        },
+        {
+            "type": "Select",
+            "name": "ValueType",
+            "caption": "Werttyp",
+            "options": [
+                { "caption": "Zahl (Float)", "value": "float" },
+                { "caption": "Schalter (Boolean)", "value": "bool" },
+                { "caption": "Text (String)", "value": "string" }
+            ]
+        },
+        {
+            "type": "ValidationTextBox",
+            "name": "Profile",
+            "caption": "Variablenprofil (optional, z. B. ~Intensity.100)"
+        },
+        {
+            "type": "NumberSpinner",
+            "name": "Ramp",
+            "caption": "Ramp / Fade-Zeit (nur Float)",
+            "digits": 2,
+            "suffix": " s",
+            "minimum": 0,
+            "maximum": 60
+        },
+        {
+            "type": "CheckBox",
+            "name": "Writable",
+            "caption": "Beschreibbar (Aktion aktivieren)"
+        },
+        {
+            "type": "CheckBox",
+            "name": "ShowString",
+            "caption": "Zusätzliche Anzeige-Variable (String-Repräsentation)"
+        }
+    ],
+    "actions": [
+        {
+            "type": "Button",
+            "caption": "Jetzt abfragen",
+            "onClick": "QSYS_Sync($id);"
+        }
+    ],
+    "status": []
+}

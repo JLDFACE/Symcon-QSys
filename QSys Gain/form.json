@@ -1,0 +1,86 @@
+{
+    "elements": [
+        {
+            "type": "Label",
+            "caption": "Steuert eine Q-SYS Gain-Komponente (Named Component). Control-Namen sind bei Standard-Gains \"gain\" und \"mute\"."
+        },
+        {
+            "type": "ValidationTextBox",
+            "name": "ComponentName",
+            "caption": "Komponente (Named Component)"
+        },
+        {
+            "type": "RowLayout",
+            "items": [
+                {
+                    "type": "ValidationTextBox",
+                    "name": "GainControl",
+                    "caption": "Gain-Control"
+                },
+                {
+                    "type": "ValidationTextBox",
+                    "name": "MuteControl",
+                    "caption": "Mute-Control (optional)"
+                }
+            ]
+        },
+        {
+            "type": "RowLayout",
+            "items": [
+                {
+                    "type": "NumberSpinner",
+                    "name": "MinDB",
+                    "caption": "Min dB",
+                    "digits": 1,
+                    "suffix": " dB",
+                    "minimum": -100,
+                    "maximum": 20
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "MaxDB",
+                    "caption": "Max dB",
+                    "digits": 1,
+                    "suffix": " dB",
+                    "minimum": -100,
+                    "maximum": 20
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "Ramp",
+                    "caption": "Fade-Zeit",
+                    "digits": 2,
+                    "suffix": " s",
+                    "minimum": 0,
+                    "maximum": 60
+                }
+            ]
+        },
+        {
+            "type": "ExpansionPanel",
+            "caption": "KNX Dimm relativ (optional)",
+            "expanded": false,
+            "items": [
+                {
+                    "type": "SelectVariable",
+                    "name": "KnxDirectionVarID",
+                    "caption": "Richtung (Boolean: true = hoch, false = runter)"
+                },
+                {
+                    "type": "SelectVariable",
+                    "name": "KnxMoveVarID",
+                    "caption": "Bewegen (Integer: 1 = Start, 0 = Stop)"
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "KnxStepPercent",
+                    "caption": "Schrittgröße (%)",
+                    "minimum": 1,
+                    "maximum": 20
+                }
+            ]
+        }
+    ],
+    "actions": [],
+    "status": []
+}

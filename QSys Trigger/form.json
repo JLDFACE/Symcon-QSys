@@ -1,0 +1,42 @@
+{
+    "elements": [
+        {
+            "type": "Label",
+            "caption": "Legt pro Zeile eine Taste an. Ein Klick sendet Value = 1 an das Control (momentaner Trigger). Für Buttons/Trigger-Controls einer Named Component."
+        },
+        {
+            "type": "List",
+            "name": "Triggers",
+            "caption": "Trigger",
+            "rowCount": 8,
+            "add": true,
+            "delete": true,
+            "columns": [
+                {
+                    "name": "Label",
+                    "caption": "Anzeigename",
+                    "width": "auto",
+                    "add": "",
+                    "edit": { "type": "ValidationTextBox" }
+                },
+                {
+                    "name": "Component",
+                    "caption": "Komponente (optional)",
+                    "width": "220px",
+                    "add": "",
+                    "edit": { "type": "ValidationTextBox" }
+                },
+                {
+                    "name": "Control",
+                    "caption": "Control",
+                    "width": "200px",
+                    "add": "",
+                    "edit": { "type": "ValidationTextBox" }
+                }
+            ],
+            "values": []
+        }
+    ],
+    "actions": [],
+    "status": []
+}
