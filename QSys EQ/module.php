@@ -4,9 +4,11 @@
  * QSys EQ - parametrischer Equalizer mit Kurvendarstellung (Typ 3)
  *
  * Liest eine equalizer_parametric-Komponente und zeichnet ihren Frequenzgang als
- * SVG in eine HTMLBox-Variable. Bedienbar sind Gain, Q und Bypass -- jeweils fuer
- * das ueber "Band" gewaehlte Band, damit die Visu mit vier Bedienelementen
- * auskommt statt mit einem Satz pro Band.
+ * SVG in eine HTMLBox-Variable und liefert sie zusaetzlich unter
+ * /hook/qsys_eq<InstanceID> aus, weil IPSView keine HTMLBox darstellt.
+ * Bedienbar sind Frequenz, Gain, Q und Bypass -- jeweils fuer das ueber "Band"
+ * gewaehlte Band, damit die Visu mit wenigen Bedienelementen auskommt statt
+ * mit einem Satz pro Band.
  *
  * Am Core verifizierte Grundlagen (Design SKUZ_FACE_190826):
  *   - pro Band: frequency.N, gain.N, bandwidth.N, q.factor.N, type.N, bypass.N
@@ -48,8 +50,8 @@ class QSysEQ extends IPSModule
         if (!IPS_VariableProfileExists('QSysEQBypass')) {
             IPS_CreateVariableProfile('QSysEQBypass', 0);
         }
-        IPS_SetVariableProfileAssociation('QSysEQBypass', false, 'Aktiv', 'Filter', 0x00ff00);
-        IPS_SetVariableProfileAssociation('QSysEQBypass', true, 'Umgangen', 'Filter', 0x808080);
+        IPS_SetVariableProfileAssociation('QSysEQBypass', false, 'Aus', 'Filter', 0x00ff00);
+        IPS_SetVariableProfileAssociation('QSysEQBypass', true, 'Bypass', 'Filter', 0x808080);
 
         $this->SetBuffer('Bands', '{}');
         $this->SetBuffer('Global', '{}');
@@ -73,6 +75,14 @@ class QSysEQ extends IPSModule
             IPS_SetVariableProfileDigits($p[0], $p[5]);
             IPS_SetVariableProfileText($p[0], '', $p[6]);
         }
+        $freqProf = $prefix . 'Freq';
+        if (!IPS_VariableProfileExists($freqProf)) {
+            IPS_CreateVariableProfile($freqProf, 2);
+        }
+        IPS_SetVariableProfileValues($freqProf, 10.0, 20000.0, 1.0);
+        IPS_SetVariableProfileDigits($freqProf, 0);
+        IPS_SetVariableProfileText($freqProf, '', ' Hz');
+
         $bandProf = $prefix . 'Band';
         if (!IPS_VariableProfileExists($bandProf)) {
             IPS_CreateVariableProfile($bandProf, 1);
@@ -87,14 +97,15 @@ class QSysEQ extends IPSModule
 
         $this->MaintainVariable('Curve', 'Frequenzgang', VARIABLETYPE_STRING, '~HTMLBox', 1, true);
         $this->MaintainVariable('Band', 'Band', VARIABLETYPE_INTEGER, $bandProf, 2, true);
-        $this->MaintainVariable('Gain', 'Gain', VARIABLETYPE_FLOAT, $prefix . 'Gain', 3, true);
-        $this->MaintainVariable('Q', 'Q', VARIABLETYPE_FLOAT, $prefix . 'Q', 4, true);
-        $this->MaintainVariable('Bypass', 'Band umgangen', VARIABLETYPE_BOOLEAN, 'QSysEQBypass', 5, true);
-        $this->MaintainVariable('MasterGain', 'Master-Gain', VARIABLETYPE_FLOAT, $masterProf, 6, true);
-        $this->MaintainVariable('EQBypass', 'EQ umgangen', VARIABLETYPE_BOOLEAN, 'QSysEQBypass', 7, true);
-        $this->MaintainVariable('Mute', 'Stumm', VARIABLETYPE_BOOLEAN, 'QSysMute', 8, true);
+        $this->MaintainVariable('Frequency', 'Frequenz', VARIABLETYPE_FLOAT, $freqProf, 3, true);
+        $this->MaintainVariable('Gain', 'Gain', VARIABLETYPE_FLOAT, $prefix . 'Gain', 4, true);
+        $this->MaintainVariable('Q', 'Q', VARIABLETYPE_FLOAT, $prefix . 'Q', 5, true);
+        $this->MaintainVariable('Bypass', 'Bypass', VARIABLETYPE_BOOLEAN, 'QSysEQBypass', 6, true);
+        $this->MaintainVariable('MasterGain', 'Master-Gain', VARIABLETYPE_FLOAT, $masterProf, 7, true);
+        $this->MaintainVariable('EQBypass', 'EQ Bypass', VARIABLETYPE_BOOLEAN, 'QSysEQBypass', 8, true);
+        $this->MaintainVariable('Mute', 'Stumm', VARIABLETYPE_BOOLEAN, 'QSysMute', 9, true);
 
-        foreach (array('Band', 'Gain', 'Q', 'Bypass', 'MasterGain', 'EQBypass', 'Mute') as $i) {
+        foreach (array('Band', 'Frequency', 'Gain', 'Q', 'Bypass', 'MasterGain', 'EQBypass', 'Mute') as $i) {
             $this->EnableAction($i);
         }
 
@@ -234,6 +245,7 @@ class QSysEQ extends IPSModule
         $global = $this->GetGlobal();
         $dirty = false;
         $maxBand = 0;
+        $freqNeu = false;
 
         foreach ($buffer['Changes'] as $c) {
             if (!isset($c['Name']) || (string) (isset($c['Component']) ? $c['Component'] : '') !== $component) {
@@ -248,7 +260,14 @@ class QSysEQ extends IPSModule
                 if ($n > $maxBand) {
                     $maxBand = $n;
                 }
-                $bands[$n][$feld] = ($feld === 'bypass') ? (bool) $val : (float) $val;
+                $neuerWert = ($feld === 'bypass') ? (bool) $val : (float) $val;
+                // Bandauswahl zeigt die Frequenz im Klartext ("4 · 690 Hz") --
+                // aendert sie sich, muss das Profil nachgezogen werden.
+                if ($feld === 'frequency'
+                    && (!isset($bands[$n]['frequency']) || abs((float) $bands[$n]['frequency'] - $neuerWert) > 0.5)) {
+                    $freqNeu = true;
+                }
+                $bands[$n][$feld] = $neuerWert;
                 $dirty = true;
                 continue;
             }
@@ -272,6 +291,12 @@ class QSysEQ extends IPSModule
             $this->BuildBandProfile($maxBand);
         }
 
+        if ($freqNeu) {
+            $bekannt = (int) $this->ReadPropertyInteger('BandCount');
+            if ($bekannt < 1) { $bekannt = (int) $this->GetBuffer('KnownBands'); }
+            if ($bekannt > 0) { $this->BuildBandProfile($bekannt); }
+        }
+
         $this->SyncSelected();
         if (isset($global['master'])) { $this->SetValueIfChanged('MasterGain', round($global['master'], 1)); }
         if (isset($global['bypass'])) { $this->SetValueIfChanged('EQBypass', (bool) $global['bypass']); }
@@ -289,6 +314,7 @@ class QSysEQ extends IPSModule
             return;
         }
         $b = $bands[$sel];
+        if (isset($b['frequency'])) { $this->SetValueIfChanged('Frequency', round((float) $b['frequency'], 0)); }
         if (isset($b['gain']))    { $this->SetValueIfChanged('Gain', round((float) $b['gain'], 1)); }
         if (isset($b['qfactor'])) { $this->SetValueIfChanged('Q', round((float) $b['qfactor'], 2)); }
         if (isset($b['bypass']))  { $this->SetValueIfChanged('Bypass', (bool) $b['bypass']); }
@@ -347,6 +373,14 @@ class QSysEQ extends IPSModule
         return true;
     }
 
+    public function SetBandFrequency(float $hz)
+    {
+        $n = (int) $this->GetValue('Band');
+        if ($n < 1 || $hz < 1) { return false; }
+        $this->ComponentSet('frequency.' . $n, round($hz, 2));
+        return true;
+    }
+
     public function SetBandQ(float $q)
     {
         $n = (int) $this->GetValue('Band');
@@ -375,6 +409,7 @@ class QSysEQ extends IPSModule
     {
         switch ($Ident) {
             case 'Band':       $this->SelectBand((int) $Value); break;
+            case 'Frequency':  $this->SetBandFrequency((float) $Value); $this->SetValueIfChanged('Frequency', round((float) $Value, 0)); break;
             case 'Gain':       $this->SetBandGain((float) $Value); $this->SetValueIfChanged('Gain', round((float) $Value, 1)); break;
             case 'Q':          $this->SetBandQ((float) $Value); $this->SetValueIfChanged('Q', round((float) $Value, 2)); break;
             case 'Bypass':     $this->SetBandBypass((bool) $Value); $this->SetValueIfChanged('Bypass', (bool) $Value); break;
@@ -723,7 +758,7 @@ class QSysEQ extends IPSModule
         if ($aus) {
             $svg .= '<text x="' . ($L + $pw / 2) . '" y="' . ($T + 18) . '" fill="' . $selCol
                   . '" font-family="sans-serif" font-size="12" text-anchor="middle">'
-                  . (!empty($global['mute']) ? 'STUMM' : 'EQ UMGANGEN') . '</text>';
+                  . (!empty($global['mute']) ? 'STUMM' : 'EQ BYPASS') . '</text>';
         }
         if (count($bands) === 0) {
             $svg .= '<text x="' . ($L + $pw / 2) . '" y="' . ($T + $ph / 2) . '" fill="' . $fg
