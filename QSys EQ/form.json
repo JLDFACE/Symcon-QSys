@@ -1,0 +1,51 @@
+{
+    "elements": [
+        {
+            "type": "Label",
+            "caption": "Zeichnet den Frequenzgang einer parametrischen EQ-Komponente als Kurve (HTMLBox) und macht Gain, Q und Bypass des gewählten Bandes bedienbar."
+        },
+        {
+            "type": "ValidationTextBox",
+            "name": "ComponentName",
+            "caption": "Komponente (Named Component, Typ equalizer_parametric)"
+        },
+        {
+            "type": "NumberSpinner",
+            "name": "BandCount",
+            "caption": "Anzahl Bänder (0 = automatisch vom Core ermitteln)",
+            "minimum": 0,
+            "maximum": 32
+        },
+        {
+            "type": "NumberSpinner",
+            "name": "SampleRate",
+            "caption": "Abtastrate des Cores (Hz)",
+            "minimum": 8000,
+            "maximum": 192000
+        },
+        {
+            "type": "NumberSpinner",
+            "name": "RangeDB",
+            "caption": "Anzeigebereich ± dB",
+            "digits": 1,
+            "minimum": 3,
+            "maximum": 40
+        },
+        {
+            "type": "CheckBox",
+            "name": "ShowBands",
+            "caption": "Einzelbänder dünn mitzeichnen"
+        },
+        {
+            "type": "CheckBox",
+            "name": "DarkMode",
+            "caption": "Dunkler Hintergrund"
+        },
+        {
+            "type": "Label",
+            "caption": "Die Kurve ist berechnet (RBJ-Biquads), nicht gemessen — sie zeigt die eingestellten Filterparameter."
+        }
+    ],
+    "actions": [],
+    "status": []
+}

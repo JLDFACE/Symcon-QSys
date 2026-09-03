@@ -167,6 +167,7 @@ class IPSModule
 
 require __DIR__ . '/../QSys Core/module.php';
 require __DIR__ . '/../QSys Router/module.php';
+require __DIR__ . '/../QSys EQ/module.php';
 
 // ---- winziges Test-Framework ----
 $GLOBALS['__pass'] = 0;
@@ -452,6 +453,84 @@ foreach ($r->sentToParent as $p) {
     if (isset($p['Buffer']['Type']) && $p['Buffer']['Type'] === 'sub') { $subs++; }
 }
 check($subs > 0, 'Mit Core wird das Abo nachgeholt');
+
+
+echo "\n== QSys EQ (Filtermathematik) ==\n";
+
+$fs = 48000;
+$P = QSysEQ::TYPE_PEAK; $LS = QSysEQ::TYPE_LOWSHELF; $HS = QSysEQ::TYPE_HIGHSHELF;
+
+// Peaking: bei f0 muss exakt der eingestellte Gain herauskommen
+foreach (array(array(1000.0, 6.0, 2.0), array(100.0, -8.0, 1.0), array(8000.0, 12.0, 4.0)) as $c) {
+    list($f0, $g, $q) = $c;
+    $db = QSysEQ::MagnitudeDB(QSysEQ::Coeffs($P, $f0, $g, $q, $fs), $f0, $fs);
+    check(abs($db - $g) < 0.02, sprintf('Peak %.0fHz %+.1fdB Q=%.1f -> bei f0 %.3f dB', $f0, $g, $q, $db));
+}
+// weit weg von f0 -> praktisch 0 dB
+$co = QSysEQ::Coeffs($P, 1000.0, 12.0, 4.0, $fs);
+check(abs(QSysEQ::MagnitudeDB($co, 20.0, $fs)) < 0.2, 'Peak 1kHz wirkt bei 20 Hz praktisch nicht');
+check(abs(QSysEQ::MagnitudeDB($co, 18000.0, $fs)) < 0.5, 'Peak 1kHz wirkt bei 18 kHz praktisch nicht');
+
+// Peak ist symmetrisch: -6 dB spiegelt +6 dB
+$a = QSysEQ::MagnitudeDB(QSysEQ::Coeffs($P, 1000.0,  6.0, 2.0, $fs), 700.0, $fs);
+$b = QSysEQ::MagnitudeDB(QSysEQ::Coeffs($P, 1000.0, -6.0, 2.0, $fs), 700.0, $fs);
+check(abs($a + $b) < 0.02, sprintf('Peak +6/-6 dB spiegeln sich (%.3f / %.3f)', $a, $b));
+
+// Q wirkt auf die Breite: hoeheres Q -> schmaler
+$breit = QSysEQ::MagnitudeDB(QSysEQ::Coeffs($P, 1000.0, 12.0, 0.7, $fs), 500.0, $fs);
+$schmal = QSysEQ::MagnitudeDB(QSysEQ::Coeffs($P, 1000.0, 12.0, 8.0, $fs), 500.0, $fs);
+check($breit > $schmal + 1.0, sprintf('hoeheres Q ist schmaler (Q0.7: %.2f dB vs Q8: %.2f dB bei 500 Hz)', $breit, $schmal));
+
+// Low-Shelf: unten voller Gain, oben nichts
+$co = QSysEQ::Coeffs($LS, 200.0, 6.0, 0.7, $fs);
+check(abs(QSysEQ::MagnitudeDB($co, 20.0, $fs) - 6.0) < 0.6, 'Low-Shelf +6 dB erreicht unten den vollen Gain');
+check(abs(QSysEQ::MagnitudeDB($co, 15000.0, $fs)) < 0.3, 'Low-Shelf wirkt oben nicht');
+// bei f0 die halbe Anhebung
+check(abs(QSysEQ::MagnitudeDB($co, 200.0, $fs) - 3.0) < 0.4, 'Low-Shelf hat bei f0 die halbe Anhebung');
+
+// High-Shelf spiegelbildlich
+$co = QSysEQ::Coeffs($HS, 4000.0, 6.0, 0.7, $fs);
+check(abs(QSysEQ::MagnitudeDB($co, 19000.0, $fs) - 6.0) < 0.8, 'High-Shelf +6 dB erreicht oben den vollen Gain');
+check(abs(QSysEQ::MagnitudeDB($co, 100.0, $fs)) < 0.3, 'High-Shelf wirkt unten nicht');
+
+// Q aus Bandbreite in Oktaven -- am Core gegengeprueft: BW 1.0 -> Q 1.41421365
+$bw = 1.0; $q = sqrt(pow(2, $bw)) / (pow(2, $bw) - 1);
+check(abs($q - 1.41421365) < 1e-6, sprintf('Q aus 1 Oktave = %.8f (Core: 1.41421365)', $q));
+
+// Summenkurve
+$freqs = QSysEQ::LogFreqs(20, 20000, 200);
+check(count($freqs) === 200 && abs($freqs[0] - 20) < 1e-9 && abs($freqs[199] - 20000) < 1e-6,
+    'LogFreqs spannt 20 Hz bis 20 kHz');
+$mitte = $freqs[100];
+check($mitte > 500 && $mitte < 1200, sprintf('LogFreqs ist logarithmisch (Mitte %.0f Hz)', $mitte));
+
+$baender = array(
+    1 => array('frequency' => 1000.0, 'gain' => 6.0, 'qfactor' => 2.0, 'type' => $P, 'bypass' => false),
+    2 => array('frequency' => 4000.0, 'gain' => -6.0, 'qfactor' => 2.0, 'type' => $P, 'bypass' => false),
+);
+$kurve = QSysEQ::Curve($baender, 0.0, array(1000.0, 4000.0), $fs);
+check(abs($kurve[0] - 6.0) < 0.2, sprintf('Summe bei 1 kHz = %.2f dB', $kurve[0]));
+check(abs($kurve[1] + 6.0) < 0.2, sprintf('Summe bei 4 kHz = %.2f dB', $kurve[1]));
+
+// bypasstes Band zaehlt nicht mit
+$baender[2]['bypass'] = true;
+$k2 = QSysEQ::Curve($baender, 0.0, array(4000.0), $fs);
+check(abs($k2[0]) < 0.2, 'Bypasstes Band wird uebersprungen');
+
+// Master-Gain verschiebt die ganze Kurve
+$k3 = QSysEQ::Curve(array(), 3.0, array(100.0, 1000.0, 10000.0), $fs);
+check(abs($k3[0] - 3.0) < 1e-9 && abs($k3[2] - 3.0) < 1e-9, 'Master-Gain hebt die gesamte Kurve');
+
+// Gain 0 traegt nichts bei
+$k4 = QSysEQ::Curve(array(1 => array('frequency'=>1000.0,'gain'=>0.0,'qfactor'=>2.0,'type'=>$P,'bypass'=>false)),
+    0.0, array(1000.0), $fs);
+check(abs($k4[0]) < 1e-9, 'Band mit 0 dB traegt nichts bei');
+
+// Robustheit: unsinnige Werte duerfen nicht in NAN/INF laufen
+foreach (array(array(0.0, 6.0, 2.0), array(30000.0, 6.0, 2.0), array(1000.0, 6.0, 0.0)) as $c) {
+    $db = QSysEQ::MagnitudeDB(QSysEQ::Coeffs($P, $c[0], $c[1], $c[2], $fs), 1000.0, $fs);
+    check(is_finite($db), sprintf('f0=%.0f q=%.1f liefert endlichen Wert (%.3f)', $c[0], $c[2], $db));
+}
 
 // ---- Ergebnis ----
 echo "\n== Ergebnis ==\n";

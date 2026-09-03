@@ -20,6 +20,7 @@ class QSysConfigurator extends IPSModule
     const GUID_GAIN       = '{D7F2AAA3-0102-4A08-834C-91E7758F8744}';
     const GUID_ROUTER     = '{206CCE6E-A80E-4032-AB12-7C060823FD2D}';
     const GUID_SNAPSHOT   = '{BD1426DA-330A-46B7-BA7D-F6CE5C7E627F}';
+    const GUID_EQ         = '{2819CDAC-AE34-4923-B2A5-B535A190A509}';
 
     // Obergrenze fuer Control-Zeilen im Formular. Symcon bricht die Ausgabe bei
     // 1 MB ab; ~4400 Zeilen reissen das sicher, 800 bleiben deutlich darunter.
@@ -262,6 +263,20 @@ class QSysConfigurator extends IPSModule
                 }
             }
             $create[] = array('moduleID' => self::GUID_GAIN, 'name' => $name, 'configuration' => $cfg);
+        } elseif (strpos($lt, 'equalizer') !== false) {
+            // Bandzahl aus den frequency.N-Controls ableiten, damit das EQ-Modul
+            // sie nicht erst selbst beim Core erfragen muss.
+            $baender = 0;
+            foreach ($controls as $c) {
+                if (isset($c['Name']) && preg_match('/^frequency\.(\d+)$/', (string) $c['Name'], $mm)) {
+                    $baender = max($baender, (int) $mm[1]);
+                }
+            }
+            $create[] = array(
+                'moduleID' => self::GUID_EQ,
+                'name' => $name,
+                'configuration' => array('ComponentName' => $name, 'BandCount' => $baender)
+            );
         } elseif (strpos($lt, 'selector') !== false) {
             // Selector-Komponente: der aktive Eintrag und die komplette Optionsliste
             // stecken im Control "selector". Das Modul liest die Quellen selbst aus

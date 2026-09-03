@@ -61,6 +61,18 @@ Quelle 1) — dieselbe Zuordnung, die Q-SYS zwischen `label.0` und Router-Eingan
 verwendet. Der Configurator erkennt beide Komponententypen und legt die Instanz
 mit der passenden Betriebsart an.
 
+### QSys EQ
+Zeichnet den Frequenzgang einer `equalizer_parametric`-Komponente als **Kurve**
+(SVG in einer `~HTMLBox`-Variablen) und macht **Gain, Q und Bypass** bedienbar —
+jeweils für das über `Band` gewählte Band. Damit kommt die Visu mit vier
+Bedienelementen aus statt mit einem Satz pro Band; die Kurve hebt das gewählte
+Band hervor. Dazu Master-Gain, Bypass und Mute der ganzen Komponente.
+
+Die Bandzahl wird automatisch erkannt. `q.factor` wird direkt gelesen und
+geschrieben — der Core rechnet die Bandbreite selbst nach. Die Kurve ist
+**berechnet** (RBJ-Biquads bei 48 kHz), nicht gemessen: sie zeigt die
+eingestellten Filterparameter, nicht das reale Signal.
+
 ### QSys Snapshot
 Snapshot-Bank laden/speichern (`Snapshot.Load`/`Save`, Bank + Nummer + Ramp).
 
@@ -70,9 +82,9 @@ Momentane Tasten (Page, Bell, Mute-All …): ein Klick sendet `Value = 1`.
 ### QSys Configurator
 Liest das **laufende Design** live aus (`Component.GetComponents` /
 `Component.GetControls`) und legt per Klick passende Instanzen an — **Gain**-,
-**Router**- und **Selector**-Komponenten werden erkannt und mit der richtigen
-Betriebsart vorbelegt (bei einem Selector inklusive der Quellennamen aus den
-`label.N`-Controls), jedes einzelne Control ist als generisches *QSys Control*
+**Router**-, **Selector**- und **EQ**-Komponenten werden erkannt und passend
+vorbelegt (beim Selector mit den Quellennamen aus den `label.N`-Controls, beim
+EQ mit der Bandzahl), jedes einzelne Control ist als generisches *QSys Control*
 anlegbar. Der Configurator wird **unter einen QSys Core** gehängt
 und nutzt dessen Host/Port über eine eigene, kurzlebige Abfrageverbindung.
 
@@ -101,7 +113,7 @@ ohne Dauerlast. Variablen werden nur bei tatsächlicher Wertänderung geschriebe
 1. IP-Symcon → **Modulverwaltung → Repositories** → dieses Repository hinzufügen
 2. Instanz **QSys Core** anlegen (Client-Socket + Host des Cores)
 3. **QSys Configurator** unter den Core hängen und das Design auslesen — oder
-   Control-/Gain-/Router-/Snapshot-/Trigger-Instanzen von Hand anlegen
+   Control-/Gain-/Router-/EQ-/Snapshot-/Trigger-Instanzen von Hand anlegen
 
 ### Hinweis SymBox (Caching)
 Bei Problemen nach Updates: Repository entfernen → SymBox neu starten →
@@ -122,7 +134,8 @@ php tests/qrc_test.php
 Geprueft werden Framing/Buffering, Dispatch (Poll -> Fan-out, StatusGet,
 Component.Get), Change-Normalisierung, ChangeGroup-/AutoPoll-Aufbau und der
 Forward-Pfad, dazu beide Router-Betriebsarten (Router und Selector inkl.
-Aufbau der Quellenliste aus den Choices). Stand: **37 Pruefungen, 0 Fehler**.
+Aufbau der Quellenliste aus den Choices) und die Filtermathematik des EQ
+(Peaking/Shelf-Biquads, Summenkurve, Grenzfaelle). Stand: **62 Pruefungen, 0 Fehler**.
 
 ### Gegen einen echten Core -- lesend
 ```bash
