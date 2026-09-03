@@ -26,6 +26,8 @@ class QSysEQ extends IPSModule
     const IF_FORWARD = '{747545EE-CA0F-490F-8F42-6D240F6CAEB4}';
     const IF_FANOUT  = '{A322AA34-4023-435D-B023-1BD80BAB9E22}';
 
+    const WEBHOOK_GUID = '{015A6EB8-D6E5-4B93-B496-0D3F77AE9FE1}';
+
     const MAX_BANDS = 32;
     const TYPE_PEAK = 1;
     const TYPE_LOWSHELF = 2;
@@ -95,6 +97,9 @@ class QSysEQ extends IPSModule
         foreach (array('Band', 'Gain', 'Q', 'Bypass', 'MasterGain', 'EQBypass', 'Mute') as $i) {
             $this->EnableAction($i);
         }
+
+        // WebHook fuer IPSView bereitstellen
+        $this->RegisterHook();
 
         $component = (string) $this->ReadPropertyString('ComponentName');
         $bands = (int) $this->ReadPropertyInteger('BandCount');
@@ -480,11 +485,140 @@ class QSysEQ extends IPSModule
 
     public function Render()
     {
+        $svg = $this->BuildSVG();
+        $this->SetBuffer('SVG', $svg);
         $vid = @$this->GetIDForIdent('Curve');
         if ($vid === false || $vid === 0) {
             return;
         }
-        $this->SetValue('Curve', $this->BuildSVG());
+        $this->SetValue('Curve', $svg);
+    }
+
+    // ------------------------------------------------------------- WebHook
+    // IPSView zeigt keine HTMLBox-Variablen an. Die gleiche Kurve wird deshalb
+    // zusaetzlich unter /hook/qsys_eq<InstanceID> ausgeliefert, damit sie in
+    // IPSView mit einem WebView-Element eingebunden werden kann.
+
+    public function HookPath()
+    {
+        return '/hook/qsys_eq' . $this->InstanceID;
+    }
+
+    // Zeigt die fertige URL im Konfigurationsformular an -- die braucht man
+    // zum Eintragen in das WebView-Element von IPSView.
+    public function GetConfigurationForm()
+    {
+        $form = json_decode((string) file_get_contents(__DIR__ . '/form.json'), true);
+        if (!is_array($form)) {
+            $form = array('elements' => array(), 'actions' => array(), 'status' => array());
+        }
+        $form['elements'][] = array(
+            'type' => 'Label',
+            'caption' => 'Für IPSView: WebView-Element auf diese Adresse zeigen lassen — '
+                . 'http://<SymBox>:3777' . $this->HookPath()
+        );
+        return json_encode($form);
+    }
+
+    private function RegisterHook()
+    {
+        $ids = @IPS_GetInstanceListByModuleID(self::WEBHOOK_GUID);
+        if (!is_array($ids) || count($ids) === 0) {
+            return false;
+        }
+        $wc = $ids[0];
+        $hooks = json_decode((string) @IPS_GetProperty($wc, 'Hooks'), true);
+        if (!is_array($hooks)) {
+            $hooks = array();
+        }
+        $pfad = $this->HookPath();
+        foreach ($hooks as $i => $h) {
+            if (isset($h['Hook']) && $h['Hook'] === $pfad) {
+                if ((int) $h['TargetID'] === (int) $this->InstanceID) {
+                    return true;   // schon korrekt eingetragen
+                }
+                $hooks[$i]['TargetID'] = $this->InstanceID;
+                IPS_SetProperty($wc, 'Hooks', json_encode($hooks));
+                IPS_ApplyChanges($wc);
+                return true;
+            }
+        }
+        $hooks[] = array('Hook' => $pfad, 'TargetID' => $this->InstanceID);
+        IPS_SetProperty($wc, 'Hooks', json_encode($hooks));
+        IPS_ApplyChanges($wc);
+        return true;
+    }
+
+    private function UnregisterHook()
+    {
+        $ids = @IPS_GetInstanceListByModuleID(self::WEBHOOK_GUID);
+        if (!is_array($ids) || count($ids) === 0) {
+            return;
+        }
+        $wc = $ids[0];
+        $hooks = json_decode((string) @IPS_GetProperty($wc, 'Hooks'), true);
+        if (!is_array($hooks)) {
+            return;
+        }
+        $pfad = $this->HookPath();
+        $neu = array();
+        $weg = false;
+        foreach ($hooks as $h) {
+            if (isset($h['Hook']) && $h['Hook'] === $pfad) { $weg = true; continue; }
+            $neu[] = $h;
+        }
+        if ($weg) {
+            IPS_SetProperty($wc, 'Hooks', json_encode($neu));
+            IPS_ApplyChanges($wc);
+        }
+    }
+
+    public function Destroy()
+    {
+        // Hook mitnehmen, sonst zeigt er ins Leere
+        if (IPS_InstanceExists($this->InstanceID)) {
+            $this->UnregisterHook();
+            $this->Unsubscribe();
+        }
+        parent::Destroy();
+    }
+
+    protected function ProcessHookData()
+    {
+        $svg = (string) $this->GetBuffer('SVG');
+        if ($svg === '') {
+            $svg = $this->BuildSVG();
+        }
+
+        // Nur die Grafik -- davon holt sich die Seite unten ihre Aktualisierung
+        if (isset($_GET['svg'])) {
+            header('Content-Type: image/svg+xml; charset=utf-8');
+            header('Cache-Control: no-store');
+            echo $svg;
+            return;
+        }
+
+        $dark = (bool) $this->ReadPropertyBoolean('DarkMode');
+        $bg = $dark ? '#1b1b1b' : '#ffffff';
+        $intervall = 3000;
+
+        header('Content-Type: text/html; charset=utf-8');
+        header('Cache-Control: no-store');
+        echo '<!DOCTYPE html><html lang="de"><head><meta charset="utf-8">'
+           . '<meta name="viewport" content="width=device-width,initial-scale=1">'
+           . '<title>' . htmlspecialchars((string) $this->ReadPropertyString('ComponentName'), ENT_QUOTES, 'UTF-8') . '</title>'
+           . '<style>html,body{margin:0;padding:0;background:' . $bg . ';height:100%;'
+           . 'display:flex;align-items:center;justify-content:center}'
+           . '#c{width:100%}#c svg{width:100%;height:auto;display:block}</style></head><body>'
+           . '<div id="c">' . $svg . '</div><script>'
+           // Ohne Nachladen bliebe die Kurve in IPSView stehen. Nur das SVG wird
+           // getauscht, damit nichts flackert; bei Fehlern still weiterversuchen.
+           . '(function(){var u=location.pathname+"?svg=1&t=";'
+           . 'setInterval(function(){fetch(u+Date.now(),{cache:"no-store"})'
+           . '.then(function(r){return r.ok?r.text():null})'
+           . '.then(function(t){if(t)document.getElementById("c").innerHTML=t;})'
+           . '.catch(function(){});},' . $intervall . ');})();'
+           . '</script></body></html>';
     }
 
     private function BuildSVG()
