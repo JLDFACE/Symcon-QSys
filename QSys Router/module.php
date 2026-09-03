@@ -48,8 +48,11 @@ class QSysRouter extends IPSModule
     {
         parent::ApplyChanges();
 
-        $this->MaintainVariable('Source', 'Quelle', VARIABLETYPE_INTEGER, $this->ProfileName(), 1, true);
-        $this->EnableAction('Source');
+        // Profil MUSS vor MaintainVariable existieren, sonst bricht Symcon beim
+        // Anlegen der Instanz mit "Profil ... existiert nicht" ab.
+        if (!IPS_VariableProfileExists($this->ProfileName())) {
+            IPS_CreateVariableProfile($this->ProfileName(), 1);
+        }
 
         // Profil aus der manuellen Liste aufbauen. Im Selector-Modus mit
         // AutoSources uebernimmt der erste Push aus "Choices" die Fuehrung.
@@ -63,9 +66,10 @@ class QSysRouter extends IPSModule
                     : ('Quelle ' . $val);
             }
             $this->WriteProfile($rows);
-        } elseif (!IPS_VariableProfileExists($this->ProfileName())) {
-            IPS_CreateVariableProfile($this->ProfileName(), 1);
         }
+
+        $this->MaintainVariable('Source', 'Quelle', VARIABLETYPE_INTEGER, $this->ProfileName(), 1, true);
+        $this->EnableAction('Source');
 
         // Abo aktualisieren
         $component = (string) $this->ReadPropertyString('ComponentName');

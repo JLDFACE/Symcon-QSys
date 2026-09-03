@@ -122,13 +122,23 @@ class IPSModule
             $GLOBALS['__vars'][$vid] = $default;
         }
     }
-    public function RegisterVariableBoolean($ident, $n, $p, $pos) { $this->ensureVar($ident, VARIABLETYPE_BOOLEAN); }
-    public function RegisterVariableInteger($ident, $n, $p, $pos) { $this->ensureVar($ident, VARIABLETYPE_INTEGER); }
-    public function RegisterVariableFloat($ident, $n, $p, $pos) { $this->ensureVar($ident, VARIABLETYPE_FLOAT); }
-    public function RegisterVariableString($ident, $n, $p, $pos) { $this->ensureVar($ident, VARIABLETYPE_STRING); }
+    public function RegisterVariableBoolean($ident, $n, $p, $pos) { $this->assertProfile($p); $this->ensureVar($ident, VARIABLETYPE_BOOLEAN); }
+    public function RegisterVariableInteger($ident, $n, $p, $pos) { $this->assertProfile($p); $this->ensureVar($ident, VARIABLETYPE_INTEGER); }
+    public function RegisterVariableFloat($ident, $n, $p, $pos) { $this->assertProfile($p); $this->ensureVar($ident, VARIABLETYPE_FLOAT); }
+    public function RegisterVariableString($ident, $n, $p, $pos) { $this->assertProfile($p); $this->ensureVar($ident, VARIABLETYPE_STRING); }
+    // Symcon bricht beim Anlegen der Instanz ab, wenn das Profil noch nicht
+    // existiert ("Profil mit dem Namen ... existiert nicht"). Der Stub bildet
+    // das nach, sonst faellt eine falsche Reihenfolge erst am Geraet auf.
+    private function assertProfile($p)
+    {
+        if ($p === '' || substr($p, 0, 1) === '~') { return; }
+        if (!IPS_VariableProfileExists($p)) {
+            throw new Exception('Profil mit dem Namen ' . $p . ' existiert nicht');
+        }
+    }
     public function MaintainVariable($ident, $n, $t, $p, $pos, $keep)
     {
-        if ($keep) { $this->ensureVar($ident, $t); }
+        if ($keep) { $this->assertProfile($p); $this->ensureVar($ident, $t); }
         elseif (isset($this->identToVid[$ident])) { unset($GLOBALS['__vars'][$this->identToVid[$ident]]); unset($this->identToVid[$ident]); }
     }
     public function EnableAction($ident) {}
