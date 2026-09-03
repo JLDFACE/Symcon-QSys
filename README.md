@@ -73,6 +73,13 @@ geschrieben — der Core rechnet die Bandbreite selbst nach. Die Kurve ist
 **berechnet** (RBJ-Biquads bei 48 kHz), nicht gemessen: sie zeigt die
 eingestellten Filterparameter, nicht das reale Signal.
 
+**IPSView:** dort werden HTMLBox-Variablen nicht dargestellt. Das Modul liefert
+die Kurve deshalb zusätzlich unter `/hook/qsys_eq<InstanceID>` als eigenständige
+Seite aus — in IPSView ein **WebView-Element** auf
+`http://<SymBox>:3777/hook/qsys_eq<InstanceID>` zeigen lassen. Die fertige
+Adresse steht im Konfigurationsformular der Instanz. Die Seite lädt alle 3 s nur
+das SVG nach, damit die Kurve mitläuft ohne zu flackern.
+
 ### QSys Snapshot
 Snapshot-Bank laden/speichern (`Snapshot.Load`/`Save`, Bank + Nummer + Ramp).
 
