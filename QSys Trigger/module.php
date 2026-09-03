@@ -57,6 +57,13 @@ class QSysTrigger extends IPSModule
 
     private function Forward($obj)
     {
+        // Beim Anlegen der Instanz laeuft ApplyChanges, bevor ein Core verbunden
+        // ist. Ohne diese Pruefung meldet Symcon "Keine uebergeordnete Instanz ist
+        // konfiguriert, welche die Daten verarbeiten kann" und bricht das Anlegen
+        // ab. Sobald der Core haengt, laeuft ApplyChanges erneut und abonniert.
+        if (!$this->HasActiveParent()) {
+            return;
+        }
         $this->SendDataToParent(json_encode(array(
             'DataID' => self::IF_FORWARD,
             'Buffer' => $obj

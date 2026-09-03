@@ -155,6 +155,8 @@ class IPSModule
     public function SetBuffer($n, $v) { $this->buffers[$n] = (string)$v; }
     public function GetBuffer($n) { return isset($this->buffers[$n]) ? $this->buffers[$n] : ''; }
 
+    public $hasParent = true;
+    public function HasActiveParent() { return $this->hasParent; }
     public function SendDataToParent($json) { $this->sentToParent[] = json_decode($json, true); return ''; }
     public function SendDataToChildren($json) { $this->sentToChildren[] = json_decode($json, true); return ''; }
     public function LogMessage($m, $l) {}
@@ -428,6 +430,28 @@ $core = newCore();
 rx($core, $poll);
 $ch = $core->sentToChildren[0]['Buffer']['Changes'][0];
 check(!array_key_exists('Choices', $ch), 'Ohne Auswahlliste kein Choices-Feld im Change');
+
+
+// --- Kind ohne Core: kein Forward, sonst bricht Symcon das Anlegen ab ---
+// Beim Anlegen laeuft ApplyChanges, bevor ein Parent verbunden ist. Ein Forward
+// wuerde dann "Keine uebergeordnete Instanz ist konfiguriert" ausloesen.
+$r = new QSysRouter(80);
+$r->hasParent = false;
+$r->Create();
+$r->SetProperty('Mode', 'router');
+$r->SetProperty('ComponentName', 'Router_Saal');
+$r->SetProperty('SelectControl', 'select.1');
+$r->sentToParent = array();
+$r->ApplyChanges();
+check(count($r->sentToParent) === 0, 'Ohne Core sendet der Router nichts an den Parent');
+
+$r->hasParent = true;
+$r->ApplyChanges();
+$subs = 0;
+foreach ($r->sentToParent as $p) {
+    if (isset($p['Buffer']['Type']) && $p['Buffer']['Type'] === 'sub') { $subs++; }
+}
+check($subs > 0, 'Mit Core wird das Abo nachgeholt');
 
 // ---- Ergebnis ----
 echo "\n== Ergebnis ==\n";
