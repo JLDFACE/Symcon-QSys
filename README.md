@@ -63,10 +63,11 @@ mit der passenden Betriebsart an.
 
 ### QSys EQ
 Zeichnet den Frequenzgang einer `equalizer_parametric`-Komponente als **Kurve**
-(SVG in einer `~HTMLBox`-Variablen) und macht **Gain, Q und Bypass** bedienbar —
-jeweils für das über `Band` gewählte Band. Damit kommt die Visu mit vier
+(SVG in einer `~HTMLBox`-Variablen) und macht **Frequenz, Gain, Q und Bypass** bedienbar —
+jeweils für das über `Band` gewählte Band. Damit kommt die Visu mit fünf
 Bedienelementen aus statt mit einem Satz pro Band; die Kurve hebt das gewählte
-Band hervor. Dazu Master-Gain, Bypass und Mute der ganzen Komponente.
+Band hervor, und die Bandauswahl zeigt die Frequenz im Klartext („4 · 690 Hz“) —
+auch nachdem man sie verstellt hat. Dazu Master-Gain, Bypass und Mute der ganzen Komponente.
 
 Die Bandzahl wird automatisch erkannt. `q.factor` wird direkt gelesen und
 geschrieben — der Core rechnet die Bandbreite selbst nach. Die Kurve ist
