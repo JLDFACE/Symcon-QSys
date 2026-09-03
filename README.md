@@ -44,8 +44,22 @@ taper-korrekt) und **Mute**, mit **Ramp** für flüssige Fades. Optionaler
 KNX-Relativ-Dimm-Block (Start/Stop + Richtung).
 
 ### QSys Router
-Quellen-/Router-Umschaltung als Integer-Selector mit sprechenden Quellen-Namen
-(z. B. Router-Control `select.1`).
+Quellenumschaltung als Integer-Variable mit sprechenden Namen. Q-SYS kennt dafür
+**zwei** Bausteine, das Modul beherrscht beide — umschaltbar über **Betriebsart**:
+
+- **Router** (`router_with_output`): ein Auswahl-Control je Ausgang, z. B.
+  `select.1`. Der Wert ist die Eingangsnummer und wird direkt gelesen/geschrieben.
+  Die Quellennamen werden in der Liste gepflegt.
+- **Selector** (`selector`): der aktive Eintrag steckt im Control `selector` als
+  JSON, die komplette Optionsliste in dessen `Choices`. Das Modul **abonniert nur
+  dieses eine Control** und baut die Quellennamen daraus selbst auf — im Design
+  gepflegte Bezeichnungen erscheinen also automatisch in Symcon. Geschrieben wird
+  auf `selector.<Index>`; das ist am Core exklusiv, ein Schreibvorgang genügt.
+
+Nach außen ist die Variable in beiden Fällen **1-basiert** (Selector-Index 0 =
+Quelle 1) — dieselbe Zuordnung, die Q-SYS zwischen `label.0` und Router-Eingang 1
+verwendet. Der Configurator erkennt beide Komponententypen und legt die Instanz
+mit der passenden Betriebsart an.
 
 ### QSys Snapshot
 Snapshot-Bank laden/speichern (`Snapshot.Load`/`Save`, Bank + Nummer + Ramp).
@@ -55,9 +69,11 @@ Momentane Tasten (Page, Bell, Mute-All …): ein Klick sendet `Value = 1`.
 
 ### QSys Configurator
 Liest das **laufende Design** live aus (`Component.GetComponents` /
-`Component.GetControls`) und legt per Klick passende Instanzen an — Gain-,
-Router-, Snapshot-Komponenten werden erkannt, jedes Control ist als generisches
-*QSys Control* anlegbar. Der Configurator wird **unter einen QSys Core** gehängt
+`Component.GetControls`) und legt per Klick passende Instanzen an — **Gain**-,
+**Router**- und **Selector**-Komponenten werden erkannt und mit der richtigen
+Betriebsart vorbelegt (bei einem Selector inklusive der Quellennamen aus den
+`label.N`-Controls), jedes einzelne Control ist als generisches *QSys Control*
+anlegbar. Der Configurator wird **unter einen QSys Core** gehängt
 und nutzt dessen Host/Port über eine eigene, kurzlebige Abfrageverbindung.
 
 ---
@@ -105,7 +121,8 @@ php tests/qrc_test.php
 
 Geprueft werden Framing/Buffering, Dispatch (Poll -> Fan-out, StatusGet,
 Component.Get), Change-Normalisierung, ChangeGroup-/AutoPoll-Aufbau und der
-Forward-Pfad. Stand: **26 Pruefungen, 0 Fehler**.
+Forward-Pfad, dazu beide Router-Betriebsarten (Router und Selector inkl.
+Aufbau der Quellenliste aus den Choices). Stand: **37 Pruefungen, 0 Fehler**.
 
 ### Gegen einen echten Core -- lesend
 ```bash
@@ -123,11 +140,12 @@ php tests/live_write_test.php [host] [port]
 ```
 
 Treibt die echten Kindmodule ueber den echten Core: `Component.Set` mit `Value`,
-`Position` und `Ramp`, Mute, der generische Control-Pfad, die Router-Umschaltung
-und ein Trigger. **Veraendert Werte am Core** -- liest dafuer alle Ausgangswerte
+`Position` und `Ramp`, Mute, der generische Control-Pfad, die Quellenumschaltung
+in **beiden** Betriebsarten und ein Trigger.
+**Veraendert Werte am Core** -- liest dafuer alle Ausgangswerte
 vorher ein und stellt sie am Ende wieder her, auch bei Abbruch. Snapshots bleiben
 unangetastet. Die Komponentennamen im Skript stammen aus dem Testdesign und
-muessen fuer ein anderes Design angepasst werden. Stand: **10 Pruefungen, 0 Fehler**.
+muessen fuer ein anderes Design angepasst werden. Stand: **14 Pruefungen, 0 Fehler**.
 
 Verifiziert gegen einen **Core 24f**, Design `SKUZ_FACE_190826`, 142 Named
 Components / 4259 Controls.

@@ -55,8 +55,23 @@ function IPS_GetProperty($id, $name)
 function IPS_SetProperty($id, $name, $value) { return true; }
 function IPS_ApplyChanges($id) { return true; }
 function IPS_VariableProfileExists($n) { return isset($GLOBALS['__profiles'][$n]); }
-function IPS_CreateVariableProfile($n, $t) { $GLOBALS['__profiles'][$n] = true; }
-function IPS_SetVariableProfileAssociation($n, $v, $a, $b, $c) {}
+function IPS_CreateVariableProfile($n, $t) { $GLOBALS['__profiles'][$n] = array('Associations' => array()); }
+function IPS_GetVariableProfile($n)
+{
+    if (!isset($GLOBALS['__profiles'][$n])) { return array('Associations' => array()); }
+    $out = array();
+    foreach ($GLOBALS['__profiles'][$n]['Associations'] as $v => $name) {
+        $out[] = array('Value' => $v, 'Name' => $name);
+    }
+    return array('Associations' => $out);
+}
+// Symcon entfernt eine Assoziation, wenn der Name leer ist -- der Router nutzt das zum Leeren.
+function IPS_SetVariableProfileAssociation($n, $v, $a, $b, $c)
+{
+    if (!isset($GLOBALS['__profiles'][$n])) { $GLOBALS['__profiles'][$n] = array('Associations' => array()); }
+    if ($a === '') { unset($GLOBALS['__profiles'][$n]['Associations'][(int)$v]); }
+    else { $GLOBALS['__profiles'][$n]['Associations'][(int)$v] = $a; }
+}
 function IPS_SetVariableProfileText($n, $a, $b) {}
 function IPS_SetVariableProfileValues($n, $a, $b, $c) {}
 function IPS_SetVariableProfileDigits($n, $a) {}
@@ -139,6 +154,7 @@ class IPSModule
 }
 
 require __DIR__ . '/../QSys Core/module.php';
+require __DIR__ . '/../QSys Router/module.php';
 
 // ---- winziges Test-Framework ----
 $GLOBALS['__pass'] = 0;
@@ -273,7 +289,7 @@ $core->SetBuffer('CGApplied', '0');   // erzwingt den (Neu-)Aufbau
 $core->FlushPending();
 $methods = array();
 foreach ($core->sentToParent as $p) {
-    $m = json_decode(rtrim($p['Buffer'], " "), true);
+    $m = json_decode(rtrim($p['Buffer'], "\0"), true);
     if (isset($m['method'])) { $methods[] = $m['method']; }
 }
 check(!in_array('ChangeGroup.AutoPoll', $methods), 'Ohne Abo kein ChangeGroup.AutoPoll');
@@ -296,6 +312,112 @@ if (count($core->sentToChildren) === 1) {
     check(count($ch) === 1 && $ch[0]['Component'] === 'Gain_Saal' && $ch[0]['Name'] === 'gain',
         'Erst-Sync-Change korrekt normalisiert');
 }
+
+
+echo "\n== QSys Router ==\n";
+
+// Hilfsfunktionen: Router-Instanz bauen, Fan-out an sie schicken
+function newRouter($props)
+{
+    $r = new QSysRouter(77);
+    $r->Create();
+    foreach ($props as $k => $v) { $r->SetProperty($k, $v); }
+    $r->ApplyChanges();
+    $r->sentToParent = array();
+    return $r;
+}
+function fanout(QSysRouter $r, $changes)
+{
+    $r->ReceiveData(json_encode(array(
+        'DataID' => '{A322AA34-4023-435D-B023-1BD80BAB9E22}',
+        'Buffer' => array('Changes' => $changes)
+    )));
+}
+function lastSet(QSysRouter $r)
+{
+    for ($i = count($r->sentToParent) - 1; $i >= 0; $i--) {
+        $b = $r->sentToParent[$i]['Buffer'];
+        if (isset($b['Type']) && $b['Type'] === 'rpc') { return $b; }
+    }
+    return null;
+}
+
+// --- Betriebsart Router: select.N traegt den Integer direkt ---
+$r = newRouter(array('Mode' => 'router', 'ComponentName' => 'Router_Saal', 'SelectControl' => 'select.1'));
+$subs = array();
+foreach ($r->sentToParent as $p) { if (isset($p['Buffer']['Type'])) { $subs[] = $p['Buffer']; } }
+$r2 = new QSysRouter(78); $r2->Create();
+$r2->SetProperty('Mode', 'router'); $r2->SetProperty('ComponentName', 'Router_Saal');
+$r2->SetProperty('SelectControl', 'select.1'); $r2->ApplyChanges();
+$subbed = null;
+foreach ($r2->sentToParent as $p) { if (isset($p['Buffer']['Type']) && $p['Buffer']['Type'] === 'sub') { $subbed = $p['Buffer']['Control']; } }
+check($subbed === 'select.1', 'Router-Modus abonniert select.1');
+
+fanout($r, array(array('Component' => 'Router_Saal', 'Name' => 'select.1', 'Value' => 3, 'String' => '3', 'Position' => 0)));
+check($r->TestGetVar('Source') === 3, 'Router-Modus: Push setzt Quelle auf 3');
+
+$r->SetSource(2);
+$m = lastSet($r);
+check($m !== null && $m['Method'] === 'Component.Set'
+      && $m['Params']['Controls'][0]['Name'] === 'select.1'
+      && (int) $m['Params']['Controls'][0]['Value'] === 2,
+      'Router-Modus: SetSource(2) schreibt select.1 = 2');
+
+// --- Betriebsart Selector: Index 0-basiert im JSON, Quelle 1-basiert ---
+$choices = array();
+foreach (array('Bluetooth', 'Ipad', '-', 'Folge Saal', 'Folge Teestube', '5ch Surround in') as $i => $t) {
+    $choices[] = json_encode(array('Text' => $t, 'TextColor' => '', 'Icon' => '', 'IconColor' => '', 'Data' => '', 'Index' => $i));
+}
+$sel = newRouter(array('Mode' => 'selector', 'ComponentName' => 'Selector_Saal', 'AutoSources' => true));
+
+$s2 = new QSysRouter(79); $s2->Create();
+$s2->SetProperty('Mode', 'selector'); $s2->SetProperty('ComponentName', 'Selector_Saal');
+$s2->ApplyChanges();
+$subbed = null;
+foreach ($s2->sentToParent as $p) { if (isset($p['Buffer']['Type']) && $p['Buffer']['Type'] === 'sub') { $subbed = $p['Buffer']['Control']; } }
+check($subbed === 'selector', 'Selector-Modus abonniert das Sammel-Control "selector"');
+
+fanout($sel, array(array(
+    'Component' => 'Selector_Saal', 'Name' => 'selector',
+    'Value' => 0, 'Position' => 0,
+    'String' => json_encode(array('Text' => 'Ipad', 'Index' => 1)),
+    'Choices' => $choices
+)));
+check($sel->TestGetVar('Source') === 2, 'Selector-Modus: Index 1 wird zu Quelle 2 (1-basiert)');
+
+$assoc = IPS_GetVariableProfile('QSysRouter77')['Associations'];
+$byVal = array();
+foreach ($assoc as $a) { $byVal[$a['Value']] = $a['Name']; }
+check(count($assoc) === 6, 'Selector-Modus: Profil aus Choices hat 6 Eintraege');
+check(isset($byVal[1]) && $byVal[1] === 'Bluetooth', 'Selector-Modus: Quelle 1 heisst Bluetooth');
+check(isset($byVal[6]) && $byVal[6] === '5ch Surround in', 'Selector-Modus: Quelle 6 heisst 5ch Surround in');
+
+$sel->SetSource(1);
+$m = lastSet($sel);
+check($m !== null && $m['Method'] === 'Component.Set'
+      && $m['Params']['Controls'][0]['Name'] === 'selector.0'
+      && (int) $m['Params']['Controls'][0]['Value'] === 1,
+      'Selector-Modus: SetSource(1) schreibt selector.0 = 1 (ein Schreibvorgang, exklusiv)');
+
+// --- Core reicht Choices durch den Fan-out weiter ---
+$core = newCore();
+$pollSel = frame(array('jsonrpc' => '2.0', 'method' => 'ChangeGroup.Poll', 'params' => array(
+    'Id' => 'symcon',
+    'Changes' => array(array(
+        'Component' => 'Selector_Saal', 'Name' => 'selector',
+        'String' => json_encode(array('Text' => 'Ipad', 'Index' => 1)),
+        'Value' => 0, 'Position' => 0, 'Choices' => $choices
+    ))
+)));
+rx($core, $pollSel);
+$ch = $core->sentToChildren[0]['Buffer']['Changes'][0];
+check(isset($ch['Choices']) && count($ch['Choices']) === 6, 'Core reicht Choices im Fan-out weiter');
+
+// --- ohne Choices bleibt der Change schlank ---
+$core = newCore();
+rx($core, $poll);
+$ch = $core->sentToChildren[0]['Buffer']['Changes'][0];
+check(!array_key_exists('Choices', $ch), 'Ohne Auswahlliste kein Choices-Feld im Change');
 
 // ---- Ergebnis ----
 echo "\n== Ergebnis ==\n";

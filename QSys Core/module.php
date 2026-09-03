@@ -484,13 +484,21 @@ class QSysCore extends IPSModule
             if (!is_array($c) || !isset($c['Name'])) {
                 continue;
             }
-            $out[] = array(
+            $row = array(
                 'Component' => isset($c['Component']) ? (string) $c['Component'] : '',
                 'Name' => (string) $c['Name'],
                 'Value' => isset($c['Value']) ? $c['Value'] : null,
                 'String' => isset($c['String']) ? (string) $c['String'] : '',
                 'Position' => isset($c['Position']) ? $c['Position'] : null
             );
+            // Auswahllisten (selector/ComboBox) durchreichen: nur dort vorhanden,
+            // traegt die kompletten Optionen inkl. Text und Index. Der Router baut
+            // sein Quellen-Profil daraus. Bewusst nur weitergeben wenn vorhanden,
+            // damit die uebrigen Changes klein bleiben.
+            if (isset($c['Choices']) && is_array($c['Choices'])) {
+                $row['Choices'] = $c['Choices'];
+            }
+            $out[] = $row;
         }
         if (count($out) === 0) {
             return;

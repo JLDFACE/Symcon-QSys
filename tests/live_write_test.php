@@ -30,12 +30,26 @@ $GLOBALS['sock'] = null;
 $GLOBALS['children'] = array();
 $GLOBALS['HOST'] = $HOST;
 
-function IPS_VariableProfileExists($n) { return true; }
-function IPS_CreateVariableProfile($n, $t) {}
-function IPS_SetVariableProfileAssociation() {}
+$GLOBALS['profiles'] = array();
+function IPS_VariableProfileExists($n) { return isset($GLOBALS['profiles'][$n]); }
+function IPS_CreateVariableProfile($n, $t) { $GLOBALS['profiles'][$n] = array(); }
+// Symcon entfernt eine Assoziation, wenn der Name leer ist
+function IPS_SetVariableProfileAssociation($n, $v, $a, $b, $c)
+{
+    if (!isset($GLOBALS['profiles'][$n])) { $GLOBALS['profiles'][$n] = array(); }
+    if ($a === '') { unset($GLOBALS['profiles'][$n][(int) $v]); }
+    else { $GLOBALS['profiles'][$n][(int) $v] = $a; }
+}
+function IPS_GetVariableProfile($n)
+{
+    $out = array();
+    if (isset($GLOBALS['profiles'][$n])) {
+        foreach ($GLOBALS['profiles'][$n] as $v => $name) { $out[] = array('Value' => $v, 'Name' => $name); }
+    }
+    return array('Associations' => $out);
+}
 function IPS_SetVariableProfileText() {} function IPS_SetVariableProfileValues() {}
 function IPS_SetVariableProfileDigits() {} function IPS_SetVariableProfileIcon() {}
-function IPS_GetVariableProfile($n) { return array('Associations' => array()); }
 function IPS_GetName($id) { return ''; } function IPS_SetName($id, $n) {}
 function IPS_GetInstance($id) {
     if ($id == 4711) { return array('ConnectionID' => 9999, 'InstanceStatus' => IS_ACTIVE); }
@@ -154,14 +168,17 @@ $ctrl = new QSysControl(5002);
 $ctrl->props = array('ComponentName' => 'gain_Garderobe_Direkt', 'ControlName' => 'gain',
                      'ValueType' => 'float', 'Ramp' => 0.0, 'Writable' => true, 'ShowString' => true);
 $router = new QSysRouter(5003);
-$router->props = array('ComponentName' => 'Router_Saal', 'SelectControl' => 'select.1',
+$router->props = array('Mode' => 'router', 'ComponentName' => 'Router_Saal', 'SelectControl' => 'select.1',
                        'Sources' => json_encode(array(array('Value'=>1,'Label'=>'1'), array('Value'=>2,'Label'=>'2'))));
+$sel = new QSysRouter(5005);
+$sel->props = array('Mode' => 'selector', 'ComponentName' => 'Selector_Saal',
+                    'SelectControl' => '', 'Sources' => '[]', 'AutoSources' => true);
 $trig = new QSysTrigger(5004);
 $trig->props = array('Triggers' => json_encode(array(
     array('Label' => 'Log leeren', 'Component' => 'TC_Routing_Saal', 'Control' => 'log.clear'))));
 
-foreach (array($gain, $ctrl, $router, $trig) as $c) { $GLOBALS['children'][] = $c; $c->Create(); }
-foreach (array($gain, $ctrl, $router, $trig) as $c) { $c->ApplyChanges(); }
+foreach (array($gain, $ctrl, $router, $sel, $trig) as $c) { $GLOBALS['children'][] = $c; $c->Create(); }
+foreach (array($gain, $ctrl, $router, $sel, $trig) as $c) { $c->ApplyChanges(); }
 pump(4.0);
 
 // ------------------------------------------------- Ausgangswerte sichern
@@ -171,13 +188,14 @@ $orig = array(
     'mute'      => $gain->GetValue('Mute'),
     'ctrl'      => $ctrl->GetValue('Value'),
     'source'    => $router->GetValue('Source'),
+    'selector'  => $sel->GetValue('Source'),
 );
 echo "\n== Ausgangswerte (per Push eingelesen) ==\n";
 foreach ($orig as $k => $v) { info(sprintf("%-9s = %s", $k, var_export($v, true))); }
 
 $restored = false;
 function restore() {
-    global $gain, $ctrl, $router, $orig, $restored;
+    global $gain, $ctrl, $router, $sel, $orig, $restored;
     if ($restored) { return; }
     $restored = true;
     echo "\n== Zuruecksetzen auf die Ausgangswerte ==\n";
@@ -185,8 +203,12 @@ function restore() {
     if ($orig['gain_db'] !== null) { $gain->SetLevel((float) $orig['gain_db']); }
     if ($orig['mute'] !== null)    { $gain->SetMute((bool) $orig['mute']); }
     if ($orig['ctrl'] !== null)    { $ctrl->RequestAction('Value', (float) $orig['ctrl']); }
+    // Selector zuerst: seine Lua-Automatik zieht den Router mit, danach select.1 setzen
+    if ($orig['selector'] !== null && (int) $orig['selector'] > 0) { $sel->SetSource((int) $orig['selector']); }
+    pump(2.0);
     if ($orig['source'] !== null && (int) $orig['source'] > 0) { $router->SetSource((int) $orig['source']); }
     pump(3.0);
+    info("selector jetzt " . var_export($GLOBALS['sel']->GetValue('Source'), true) . " (Soll " . var_export($orig['selector'], true) . ")");
     info("gain_db  jetzt " . var_export($GLOBALS['gain']->GetValue('Level'), true) . " (Soll " . var_export($orig['gain_db'], true) . ")");
     info("mute     jetzt " . var_export($GLOBALS['gain']->GetValue('Mute'), true) . " (Soll " . var_export($orig['mute'], true) . ")");
     info("ctrl     jetzt " . var_export($GLOBALS['ctrl']->GetValue('Value'), true) . " (Soll " . var_export($orig['ctrl'], true) . ")");
@@ -256,6 +278,35 @@ pump(2.0);
 chk($ok === true, 'Fire(0) angenommen');
 chk(count($core->logs) === $before, 'Core meldet keinen QRC-Fehler auf den Trigger');
 if (count($core->logs) > $before) { foreach (array_slice($core->logs, $before) as $l) { info('LOG: ' . $l); } }
+
+echo "\n== 8) QSys Router im Selector-Modus (Selector_Saal) ==\n";
+if ($orig['selector'] === null || (int) $orig['selector'] < 1) {
+    info('keine Auswahl eingelesen -- uebersprungen');
+} else {
+    $cur = (int) $orig['selector'];
+    chk(true, 'aktive Quelle per Push gelesen: ' . $cur);
+
+    // Das Profil muss sich aus den Choices des Cores gefuellt haben
+    $assoc = IPS_GetVariableProfile('QSysRouter5005')['Associations'];
+    $names = array();
+    foreach ($assoc as $a) { $names[$a['Value']] = $a['Name']; }
+    info('Quellen aus dem Design: ' . json_encode($names, JSON_UNESCAPED_UNICODE));
+    chk(count($assoc) > 1, 'Quellenliste automatisch aus dem Design uebernommen (' . count($assoc) . ' Eintraege)');
+    chk(isset($names[$cur]), 'aktive Quelle ' . $cur . ' hat einen Namen: ' . (isset($names[$cur]) ? $names[$cur] : '-'));
+
+    // auf eine andere benannte Quelle schalten
+    $target = null;
+    foreach ($names as $v => $n) { if ((int) $v !== $cur && $n !== '' && $n !== '-') { $target = (int) $v; break; } }
+    if ($target === null) {
+        info('keine alternative benannte Quelle -- Umschalttest uebersprungen');
+    } else {
+        info('schalte auf Quelle ' . $target . ' ("' . $names[$target] . '")');
+        $sel->SetSource($target);
+        pump(3.0);
+        chk((int) $sel->GetValue('Source') === $target,
+            'Selector meldet nach dem Umschalten Quelle ' . $sel->GetValue('Source'));
+    }
+}
 
 restore();
 

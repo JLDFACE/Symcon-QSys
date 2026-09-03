@@ -202,8 +202,26 @@ class QSysConfigurator extends IPSModule
                 }
             }
             $create[] = array('moduleID' => self::GUID_GAIN, 'name' => $name, 'configuration' => $cfg);
+        } elseif (strpos($lt, 'selector') !== false) {
+            // Selector-Komponente: der aktive Eintrag und die komplette Optionsliste
+            // stecken im Control "selector". Das Modul liest die Quellen selbst aus
+            // dessen Choices, hier werden sie nur als Startwert vorbelegt.
+            $create[] = array(
+                'moduleID' => self::GUID_ROUTER,
+                'name' => $name,
+                'configuration' => array(
+                    'Mode' => 'selector',
+                    'ComponentName' => $name,
+                    'AutoSources' => true,
+                    'Sources' => json_encode($this->SelectorSources($controls))
+                )
+            );
         } elseif (strpos($lt, 'router') !== false) {
-            $create[] = array('moduleID' => self::GUID_ROUTER, 'name' => $name, 'configuration' => array('ComponentName' => $name));
+            $create[] = array(
+                'moduleID' => self::GUID_ROUTER,
+                'name' => $name,
+                'configuration' => array('Mode' => 'router', 'ComponentName' => $name)
+            );
         } elseif (strpos($lt, 'snapshot') !== false) {
             $create[] = array('moduleID' => self::GUID_SNAPSHOT, 'name' => $name, 'configuration' => array('BankName' => $name));
         }
@@ -221,6 +239,52 @@ class QSysConfigurator extends IPSModule
             $row['create'] = $create;
         }
         return $row;
+    }
+
+    // Quellenliste einer Selector-Komponente als [{Value,Label}] (Value 1-basiert,
+    // passend zum Router-Modul). Bevorzugt die "label.N"-Controls, die
+    // Component.GetControls sicher liefert; ersatzweise die Choices des
+    // "selector"-Controls, falls das Design keine Labels fuehrt.
+    private function SelectorSources($controls)
+    {
+        $rows = array();
+        foreach ($controls as $c) {
+            if (!isset($c['Name'])) {
+                continue;
+            }
+            if (preg_match('/^label\.(\d+)$/', (string) $c['Name'], $m)) {
+                $idx = (int) $m[1];
+                $txt = isset($c['String']) ? (string) $c['String'] : '';
+                $rows[$idx] = ($txt !== '') ? $txt : ('Quelle ' . ($idx + 1));
+            }
+        }
+
+        if (count($rows) === 0) {
+            foreach ($controls as $c) {
+                if (!isset($c['Name']) || (string) $c['Name'] !== 'selector') {
+                    continue;
+                }
+                if (!isset($c['Choices']) || !is_array($c['Choices'])) {
+                    continue;
+                }
+                foreach ($c['Choices'] as $entry) {
+                    $d = json_decode((string) $entry, true);
+                    if (!is_array($d) || !isset($d['Index'])) {
+                        continue;
+                    }
+                    $idx = (int) $d['Index'];
+                    $txt = isset($d['Text']) ? (string) $d['Text'] : '';
+                    $rows[$idx] = ($txt !== '') ? $txt : ('Quelle ' . ($idx + 1));
+                }
+            }
+        }
+
+        ksort($rows);
+        $out = array();
+        foreach ($rows as $idx => $label) {
+            $out[] = array('Value' => $idx + 1, 'Label' => $label);
+        }
+        return $out;
     }
 
     // Zeile fuer ein Control -> immer als generisches QSys Control anlegbar

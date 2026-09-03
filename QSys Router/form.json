@@ -2,22 +2,40 @@
     "elements": [
         {
             "type": "Label",
-            "caption": "Umschaltung einer Quelle/eines Routers. Bei einer Router-Komponente ist das Auswahl-Control typischerweise \"select.1\" (Ausgang 1)."
+            "caption": "Umschaltung einer Quelle. Q-SYS kennt dafür zwei Bausteine – die Betriebsart muss zur Komponente passen."
+        },
+        {
+            "type": "Select",
+            "name": "Mode",
+            "caption": "Betriebsart",
+            "options": [
+                { "caption": "Router (select.N, Wert = Eingangsnummer)", "value": "router" },
+                { "caption": "Selector (selector.N, Auswahlliste)", "value": "selector" }
+            ]
         },
         {
             "type": "ValidationTextBox",
             "name": "ComponentName",
-            "caption": "Komponente (Named Component, leer = Named Control)"
+            "caption": "Komponente (Named Component)"
         },
         {
             "type": "ValidationTextBox",
             "name": "SelectControl",
-            "caption": "Auswahl-Control"
+            "caption": "Auswahl-Control (nur Betriebsart Router, z. B. select.1 für Ausgang 1)"
+        },
+        {
+            "type": "Label",
+            "caption": "Betriebsart Selector: das Control heißt immer \"selector\", es muss nichts eingetragen werden. Die Quellen liest das Modul selbst aus der Auswahlliste der Komponente."
+        },
+        {
+            "type": "CheckBox",
+            "name": "AutoSources",
+            "caption": "Quellen automatisch aus dem Design übernehmen (nur Betriebsart Selector)"
         },
         {
             "type": "List",
             "name": "Sources",
-            "caption": "Quellen (Wert → Anzeigename)",
+            "caption": "Quellen (Wert → Anzeigename) – nötig für Router, sonst nur als Vorbelegung",
             "rowCount": 8,
             "add": true,
             "delete": true,
