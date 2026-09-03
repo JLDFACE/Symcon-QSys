@@ -146,11 +146,13 @@ class QSysConfigurator extends IPSModule
             $cType = isset($comp['Type']) ? (string) $comp['Type'] : '';
             $compRowId = crc32('C:' . $cName) & 0x7fffffff;
 
-            $values[] = $this->ComponentRow($compRowId, $cName, $cType);
-
-            // Controls dieser Komponente holen
+            // Controls zuerst holen: der Core meldet dort ValueMin/ValueMax, damit
+            // laesst sich z. B. der dB-Bereich einer Gain-Komponente vorbelegen.
             $ctrls = $this->QrcRequest($client, 'Component.GetControls', array('Name' => $cName));
             $list = (is_array($ctrls) && isset($ctrls['Controls']) && is_array($ctrls['Controls'])) ? $ctrls['Controls'] : array();
+
+            $values[] = $this->ComponentRow($compRowId, $cName, $cType, $list);
+
             foreach ($list as $ctrl) {
                 if (!isset($ctrl['Name'])) {
                     continue;
@@ -179,13 +181,27 @@ class QSysConfigurator extends IPSModule
     }
 
     // Zeile fuer eine Komponente inkl. passendem "create" (Gain/Router/Snapshot/generisch)
-    private function ComponentRow($rowId, $name, $type)
+    private function ComponentRow($rowId, $name, $type, $controls = array())
     {
         $create = array();
         $lt = strtolower($type . ' ' . $name);
 
         if (strpos($lt, 'gain') !== false) {
-            $create[] = array('moduleID' => self::GUID_GAIN, 'name' => $name, 'configuration' => array('ComponentName' => $name));
+            // dB-Bereich aus dem Design uebernehmen statt zu raten: der Core meldet
+            // ValueMin/ValueMax am gain-Control (z. B. -100..0 statt der Annahme -100..+20).
+            $cfg = array('ComponentName' => $name);
+            foreach ($controls as $c) {
+                if (isset($c['Name']) && $c['Name'] === 'gain') {
+                    if (isset($c['ValueMin'])) {
+                        $cfg['MinDB'] = (float) $c['ValueMin'];
+                    }
+                    if (isset($c['ValueMax'])) {
+                        $cfg['MaxDB'] = (float) $c['ValueMax'];
+                    }
+                    break;
+                }
+            }
+            $create[] = array('moduleID' => self::GUID_GAIN, 'name' => $name, 'configuration' => $cfg);
         } elseif (strpos($lt, 'router') !== false) {
             $create[] = array('moduleID' => self::GUID_ROUTER, 'name' => $name, 'configuration' => array('ComponentName' => $name));
         } elseif (strpos($lt, 'snapshot') !== false) {

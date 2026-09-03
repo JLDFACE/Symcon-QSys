@@ -327,13 +327,18 @@ class QSysCore extends IPSModule
             ));
         }
 
-        // AutoPoll aktivieren (Core pusht Aenderungen) + einmal sofort pollen (Erst-Sync)
-        $rate = (int) $this->ReadPropertyInteger('PollRate');
-        if ($rate < 1) {
-            $rate = 1;
+        // AutoPoll aktivieren (Core pusht Aenderungen) + einmal sofort pollen (Erst-Sync).
+        // Nur wenn mindestens ein Abo besteht: die ChangeGroup entsteht am Core erst
+        // durch AddComponentControl/AddControl. Ohne Abo wuerde der Core AutoPoll und
+        // Poll mit "Change group does not exist" (Code 6) beantworten.
+        if (count($byComponent) > 0 || count($named) > 0) {
+            $rate = (int) $this->ReadPropertyInteger('PollRate');
+            if ($rate < 1) {
+                $rate = 1;
+            }
+            $this->SendRPC('ChangeGroup.AutoPoll', array('Id' => self::CHANGEGROUP_ID, 'Rate' => $rate));
+            $this->SendRPC('ChangeGroup.Poll', array('Id' => self::CHANGEGROUP_ID));
         }
-        $this->SendRPC('ChangeGroup.AutoPoll', array('Id' => self::CHANGEGROUP_ID, 'Rate' => $rate));
-        $this->SendRPC('ChangeGroup.Poll', array('Id' => self::CHANGEGROUP_ID));
 
         $this->SendRPC('StatusGet', 0);
 
@@ -411,6 +416,14 @@ class QSysCore extends IPSModule
                 // StatusGet-Antwort erkennen
                 if (isset($result['DesignName']) || isset($result['Platform']) || isset($result['State'])) {
                     $this->ApplyCoreStatus($result);
+                    return;
+                }
+                // Antwort auf ein explizites ChangeGroup.Poll -> {Id, Changes}
+                // Traegt den Erst-Sync nach (Neu)Aufbau der ChangeGroup, z. B. nach
+                // einem Reconnect. Ohne diesen Zweig blieben die Kinder dort auf
+                // alten Werten stehen, bis sich am Core zufaellig etwas aendert.
+                if (isset($result['Changes']) && is_array($result['Changes'])) {
+                    $this->FanOutChanges($result['Changes']);
                     return;
                 }
                 // Component.Get-Antwort erkennen -> als Changes fan-out

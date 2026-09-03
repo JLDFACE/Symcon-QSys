@@ -264,6 +264,39 @@ foreach ($core->sentToParent as $p) {
 }
 check($found, 'Forward "rpc" sendet Component.Set an den Socket');
 
+// --- Test 7: ohne Abo kein AutoPoll/Poll (Core wuerde mit Code 6 antworten) ---
+// Am Core entsteht die ChangeGroup erst durch AddComponentControl/AddControl.
+// Verifiziert am echten Core 24f: AutoPoll auf eine leere Gruppe -> Fehler
+// {"code":6,"message":"Change group 'symcon' does not exist"}.
+$core = newCore();
+$core->SetBuffer('CGApplied', '0');   // erzwingt den (Neu-)Aufbau
+$core->FlushPending();
+$methods = array();
+foreach ($core->sentToParent as $p) {
+    $m = json_decode(rtrim($p['Buffer'], " "), true);
+    if (isset($m['method'])) { $methods[] = $m['method']; }
+}
+check(!in_array('ChangeGroup.AutoPoll', $methods), 'Ohne Abo kein ChangeGroup.AutoPoll');
+check(!in_array('ChangeGroup.Poll', $methods), 'Ohne Abo kein ChangeGroup.Poll');
+
+// --- Test 8: Antwort auf ChangeGroup.Poll ({Id,Changes}) erzeugt Fan-out ---
+// Das ist der Erst-Sync nach (Neu-)Aufbau der ChangeGroup, z. B. nach einem
+// Reconnect. Format 1:1 vom echten Core uebernommen.
+$core = newCore();
+rx($core, frame(array(
+    'jsonrpc' => '2.0',
+    'id' => 6,
+    'result' => array('Id' => 'symcon', 'Changes' => array(
+        array('Component' => 'Gain_Saal', 'Name' => 'gain', 'String' => '0dB', 'Value' => 0.0, 'Position' => 1.0)
+    ))
+)));
+check(count($core->sentToChildren) === 1, 'ChangeGroup.Poll-Antwort erzeugt Fan-out');
+if (count($core->sentToChildren) === 1) {
+    $ch = $core->sentToChildren[0]['Buffer']['Changes'];
+    check(count($ch) === 1 && $ch[0]['Component'] === 'Gain_Saal' && $ch[0]['Name'] === 'gain',
+        'Erst-Sync-Change korrekt normalisiert');
+}
+
 // ---- Ergebnis ----
 echo "\n== Ergebnis ==\n";
 echo "  bestanden: {$GLOBALS['__pass']}\n";
