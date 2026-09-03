@@ -307,6 +307,13 @@ class QSysEQ extends IPSModule
             }
             IPS_SetVariableProfileAssociation($prof, $n, $label, '', -1);
         }
+
+        // Frische Instanz: erstes Band vorwaehlen, sonst stehen Gain/Q/Bypass
+        // ohne Bezug auf 0 herum.
+        if ($count > 0 && (int) $this->GetValue('Band') < 1) {
+            $this->SetValueIfChanged('Band', 1);
+            $this->SyncSelected();
+        }
     }
 
     private function FormatHz($f)
