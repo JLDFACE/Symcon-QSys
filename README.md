@@ -146,7 +146,8 @@ Geprueft werden Framing/Buffering, Dispatch (Poll -> Fan-out, StatusGet,
 Component.Get), Change-Normalisierung, ChangeGroup-/AutoPoll-Aufbau und der
 Forward-Pfad, dazu beide Router-Betriebsarten (Router und Selector inkl.
 Aufbau der Quellenliste aus den Choices) und die Filtermathematik des EQ
-(Peaking/Shelf-Biquads, Summenkurve, Grenzfaelle). Stand: **62 Pruefungen, 0 Fehler**.
+(Peaking/Shelf, Summenkurve, Grenzfaelle, analoger Verlauf inkl. der Regression,
+dass ein hohes Band oben nicht zusammenbricht). Stand: **76 Pruefungen, 0 Fehler**.
 
 ### Gegen einen echten Core -- lesend
 ```bash
