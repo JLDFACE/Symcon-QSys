@@ -18,8 +18,10 @@
  *   - Q aus Bandbreite in Oktaven: Q = sqrt(2^BW) / (2^BW - 1)  (am Core geprueft)
  *   - global: master.gain, bypass, mute, invert
  *
- * Die Kurve ist berechnet, nicht gemessen: RBJ-Biquads bei 48 kHz, Betragsgang an
- * logarithmisch verteilten Stuetzstellen, Baender in dB addiert.
+ * Die Kurve ist berechnet, nicht gemessen: analoger Prototyp (s-Ebene), Betragsgang
+ * an 240 logarithmisch verteilten Stuetzstellen, Baender in dB addiert. Der analoge
+ * Verlauf ist der Bezug, den EQ-Oberflaechen zeichnen -- ein digitaler Biquad weicht
+ * nahe Nyquist deutlich ab (15,6-kHz-Band: bei 19 kHz 2,3 statt 6,7 dB).
  */
 
 class QSysEQ extends IPSModule
@@ -42,7 +44,7 @@ class QSysEQ extends IPSModule
 
         $this->RegisterPropertyString('ComponentName', '');
         $this->RegisterPropertyInteger('BandCount', 0);      // 0 = automatisch ermitteln
-        $this->RegisterPropertyInteger('SampleRate', 48000);
+        $this->RegisterPropertyInteger('SampleRate', 48000);  // nur noch historisch, Kurve ist analog
         $this->RegisterPropertyFloat('RangeDB', 18.0);       // vertikale Halbskala
         $this->RegisterPropertyBoolean('ShowBands', true);   // Einzelbaender duenn mitzeichnen
         $this->RegisterPropertyBoolean('DarkMode', true);
@@ -496,10 +498,56 @@ class QSysEQ extends IPSModule
     }
 
     /*
+     * Betragsgang des ANALOGEN Prototyps in dB -- das ist der Verlauf, den
+     * EQ-Oberflaechen (auch der Q-SYS Designer) zeichnen.
+     *
+     * Warum nicht der digitale Biquad: durch die bilineare Transformation wird
+     * die Frequenzachse nahe Nyquist gestaucht. Ein Band bei 15,6 kHz mit Q 1,43
+     * und +9 dB liegt digital bei 19 kHz nur noch bei +2,3 dB statt +6,7 dB --
+     * 4,6 dB Unterschied, deutlich sichtbar. Am Geraet arbeitet der Core zwar
+     * digital, fuer die Anzeige ist aber der ideale Verlauf der richtige Bezug.
+     *
+     * Normiert auf u = f/f0, s = j*u:
+     *   Peaking     H = (1-u^2 + j*u*A/Q) / (1-u^2 + j*u/(A*Q))
+     *   Low-Shelf   H = A * (A-u^2 + j*u*sqrt(A)/Q) / (1-A*u^2 + j*u*sqrt(A)/Q)
+     *   High-Shelf  H = A * (1-A*u^2 + j*u*sqrt(A)/Q) / (A-u^2 + j*u*sqrt(A)/Q)
+     */
+    public static function MagnitudeAnalogDB($type, $f, $f0, $gainDB, $q)
+    {
+        if ($q <= 0) { $q = 0.001; }
+        if ($f0 <= 0) { $f0 = 1.0; }
+        $A = pow(10.0, $gainDB / 40.0);
+        $u = $f / $f0;
+        $u2 = $u * $u;
+        $sqA = sqrt($A);
+
+        if ($type == self::TYPE_LOWSHELF) {
+            $nr = $A - $u2;      $ni = $u * $sqA / $q;
+            $dr = 1 - $A * $u2;  $di = $u * $sqA / $q;
+            $skala = $A;
+        } elseif ($type == self::TYPE_HIGHSHELF) {
+            $nr = 1 - $A * $u2;  $ni = $u * $sqA / $q;
+            $dr = $A - $u2;      $di = $u * $sqA / $q;
+            $skala = $A;
+        } else {
+            $nr = 1 - $u2;       $ni = $u * $A / $q;
+            $dr = 1 - $u2;       $di = $u / ($A * $q);
+            $skala = 1.0;
+        }
+        $num = $skala * sqrt($nr * $nr + $ni * $ni);
+        $den = sqrt($dr * $dr + $di * $di);
+        if ($den <= 1e-20) { return 0.0; }
+        if ($num <= 1e-20) { return -200.0; }
+        return 20.0 * log10($num / $den);
+    }
+
+    /*
      * Summenkurve: fuer jede Stuetzstelle die dB-Beitraege aller aktiven Baender
      * plus Master-Gain. $bands: [n => [frequency,gain,qfactor,type,bypass]]
+     * $fs wird nicht mehr gebraucht (analoger Prototyp), bleibt der Signatur
+     * wegen erhalten.
      */
-    public static function Curve($bands, $master, $freqs, $fs)
+    public static function Curve($bands, $master, $freqs, $fs = 48000)
     {
         $out = array();
         foreach ($freqs as $f) { $out[] = (float) $master; }
@@ -507,14 +555,12 @@ class QSysEQ extends IPSModule
             if (!empty($b['bypass'])) { continue; }
             $g = isset($b['gain']) ? (float) $b['gain'] : 0.0;
             if (abs($g) < 0.005) { continue; }
-            $co = self::Coeffs(
-                isset($b['type']) ? (int) $b['type'] : self::TYPE_PEAK,
-                isset($b['frequency']) ? (float) $b['frequency'] : 1000.0,
-                $g,
-                isset($b['qfactor']) ? (float) $b['qfactor'] : 1.0,
-                $fs
-            );
-            foreach ($freqs as $i => $f) { $out[$i] += self::MagnitudeDB($co, $f, $fs); }
+            $type = isset($b['type']) ? (int) $b['type'] : self::TYPE_PEAK;
+            $f0 = isset($b['frequency']) ? (float) $b['frequency'] : 1000.0;
+            $q = isset($b['qfactor']) ? (float) $b['qfactor'] : 1.0;
+            foreach ($freqs as $i => $f) {
+                $out[$i] += self::MagnitudeAnalogDB($type, $f, $f0, $g, $q);
+            }
         }
         return $out;
     }

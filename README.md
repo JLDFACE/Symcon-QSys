@@ -71,8 +71,11 @@ auch nachdem man sie verstellt hat. Dazu Master-Gain, Bypass und Mute der ganzen
 
 Die Bandzahl wird automatisch erkannt. `q.factor` wird direkt gelesen und
 geschrieben — der Core rechnet die Bandbreite selbst nach. Die Kurve ist
-**berechnet** (RBJ-Biquads bei 48 kHz), nicht gemessen: sie zeigt die
-eingestellten Filterparameter, nicht das reale Signal.
+**berechnet**, nicht gemessen: sie zeigt die eingestellten Filterparameter, nicht
+das reale Signal. Gezeichnet wird der **analoge Idealverlauf** — derselbe Bezug,
+den auch der Q-SYS Designer verwendet. Ein digitaler Biquad bei 48 kHz weicht
+nahe Nyquist deutlich ab: ein Band bei 15,6 kHz mit Q 1,43 und +9 dB liegt dort
+bei 19 kHz nur noch bei +2,3 statt +6,7 dB.
 
 **IPSView:** dort werden HTMLBox-Variablen nicht dargestellt. Das Modul liefert
 die Kurve deshalb zusätzlich unter `/hook/qsys_eq<InstanceID>` als eigenständige

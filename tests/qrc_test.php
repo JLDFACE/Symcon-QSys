@@ -532,6 +532,51 @@ foreach (array(array(0.0, 6.0, 2.0), array(30000.0, 6.0, 2.0), array(1000.0, 6.0
     check(is_finite($db), sprintf('f0=%.0f q=%.1f liefert endlichen Wert (%.3f)', $c[0], $c[2], $db));
 }
 
+
+echo "\n== QSys EQ (analoger Verlauf -- so zeichnet der Designer) ==\n";
+$P = QSysEQ::TYPE_PEAK; $LS = QSysEQ::TYPE_LOWSHELF; $HS = QSysEQ::TYPE_HIGHSHELF;
+$A = function($t,$f,$f0,$g,$q) { return QSysEQ::MagnitudeAnalogDB($t,$f,$f0,$g,$q); };
+
+// Peak trifft bei f0 exakt den Gain
+foreach (array(array(1000.0,6.0,2.0), array(15600.0,9.0,1.43), array(66.0,4.0,1.28)) as $c) {
+    list($f0,$g,$q) = $c;
+    check(abs($A($P,$f0,$f0,$g,$q) - $g) < 1e-9,
+        sprintf('analog Peak %.0fHz %+.1fdB -> bei f0 exakt %.4f dB', $f0, $g, $A($P,$f0,$f0,$g,$q)));
+}
+// symmetrisch
+$a = $A($P,700.0,1000.0,6.0,2.0); $b = $A($P,700.0,1000.0,-6.0,2.0);
+check(abs($a+$b) < 1e-9, sprintf('analog Peak +6/-6 spiegeln sich exakt (%.4f / %.4f)', $a, $b));
+
+// Shelf-Grenzwerte
+check(abs($A($LS,1.0,200.0,6.0,0.7) - 6.0) < 0.01, 'analog Low-Shelf erreicht unten den vollen Gain');
+check(abs($A($LS,200000.0,200.0,6.0,0.7)) < 0.01, 'analog Low-Shelf laeuft oben auf 0 dB aus');
+check(abs($A($LS,200.0,200.0,6.0,0.7) - 3.0) < 0.01, 'analog Low-Shelf hat bei f0 exakt die halbe Anhebung');
+check(abs($A($HS,200000.0,4000.0,6.0,0.7) - 6.0) < 0.01, 'analog High-Shelf erreicht oben den vollen Gain');
+check(abs($A($HS,1.0,4000.0,6.0,0.7)) < 0.01, 'analog High-Shelf laeuft unten auf 0 dB aus');
+
+// Der eigentliche Grund fuer die Umstellung: ein hohes Band darf oben nicht
+// zusammenbrechen. Digital (48 kHz) faellt es bei 19 kHz auf ~2.3 dB ab.
+$hoch = $A($P,19000.0,15600.0,9.0,1.43);
+$digital = QSysEQ::MagnitudeDB(QSysEQ::Coeffs($P,15600.0,9.0,1.43,48000), 19000.0, 48000);
+check($hoch > 6.0, sprintf('analoges Band 15.6kHz haelt bei 19kHz noch %+.2f dB', $hoch));
+check($hoch - $digital > 3.0,
+    sprintf('deutlicher Unterschied zum digitalen Biquad (%.2f vs %.2f dB)', $hoch, $digital));
+
+// Analog ist unabhaengig von der Abtastrate -- Kurve darf sich nicht aendern
+$bd = array(1 => array('frequency'=>15600.0,'gain'=>9.0,'qfactor'=>1.43,'type'=>$P,'bypass'=>false));
+$fr = QSysEQ::LogFreqs(20,20000,80);
+$k48 = QSysEQ::Curve($bd, 0.0, $fr, 48000);
+$k96 = QSysEQ::Curve($bd, 0.0, $fr, 96000);
+$gleich = true;
+foreach ($k48 as $i => $v) { if (abs($v - $k96[$i]) > 1e-12) { $gleich = false; break; } }
+check($gleich, 'Kurve ist unabhaengig von der Abtastrate');
+
+// Robustheit
+foreach (array(array(0.0,2.0), array(1000.0,0.0)) as $c) {
+    $v = $A($P,1000.0,$c[0],6.0,$c[1]);
+    check(is_finite($v), sprintf('analog f0=%.0f q=%.1f liefert endlichen Wert (%.3f)', $c[0], $c[1], $v));
+}
+
 // ---- Ergebnis ----
 echo "\n== Ergebnis ==\n";
 echo "  bestanden: {$GLOBALS['__pass']}\n";

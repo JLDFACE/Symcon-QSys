@@ -18,13 +18,6 @@
         },
         {
             "type": "NumberSpinner",
-            "name": "SampleRate",
-            "caption": "Abtastrate des Cores (Hz)",
-            "minimum": 8000,
-            "maximum": 192000
-        },
-        {
-            "type": "NumberSpinner",
             "name": "RangeDB",
             "caption": "Anzeigebereich ± dB",
             "digits": 1,
@@ -43,7 +36,7 @@
         },
         {
             "type": "Label",
-            "caption": "Die Kurve ist berechnet (RBJ-Biquads), nicht gemessen — sie zeigt die eingestellten Filterparameter."
+            "caption": "Die Kurve ist berechnet, nicht gemessen: sie zeigt den idealen Verlauf der eingestellten Filterparameter — derselbe Bezug, den auch der Q-SYS Designer zeichnet."
         }
     ],
     "actions": [],
