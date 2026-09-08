@@ -36,11 +36,6 @@ class QSysCore extends IPSModule
 
         $this->RequireParent('{3CFF0FD9-E306-41DB-9B5A-9D06D38576C3}'); // Client Socket
 
-        // QRC liegt fest auf TCP 1710. Direkt bei der Anlage vorbelegen, damit im
-        // Socket-Dialog kein leeres Portfeld steht (ohne ApplyChanges, die Instanz
-        // wird gerade erst erzeugt).
-        $this->PresetSocketPort(false);
-
         if (!IPS_VariableProfileExists('QSysOnline')) {
             IPS_CreateVariableProfile('QSysOnline', 0);
         }
@@ -82,7 +77,7 @@ class QSysCore extends IPSModule
 
         // Port-Default 1710 an der ClientSocket setzen, solange dort keiner steht.
         // Idempotent: ein selbst eingetragener Port wird nie ueberschrieben.
-        $this->PresetSocketPort(true);
+        $this->PresetSocketPort();
 
         $this->SetBuffer('CGApplied', '0');
         $this->SetBuffer('incomingData', '');
@@ -94,9 +89,9 @@ class QSysCore extends IPSModule
     }
 
     // Belegt den Port der uebergeordneten Client-Socket mit 1710 (QRC), falls dort
-    // noch keiner eingetragen ist. $apply = true stoesst zusaetzlich IPS_ApplyChanges
-    // an der Socket an, damit die Aenderung sofort greift.
-    private function PresetSocketPort($apply)
+    // noch keiner eingetragen ist. Nur aus ApplyChanges heraus sinnvoll: bei Create()
+    // hat RequireParent noch keine ConnectionID geliefert (auf der Catan C1 verifiziert).
+    private function PresetSocketPort()
     {
         $connId = $this->GetConnectionID();
         if ($connId <= 0) {
@@ -107,9 +102,7 @@ class QSysCore extends IPSModule
             return;
         }
         @IPS_SetProperty($connId, 'Port', 1710);
-        if ($apply) {
-            @IPS_ApplyChanges($connId);
-        }
+        @IPS_ApplyChanges($connId);
     }
 
     public function GetConnectionID()
@@ -172,7 +165,10 @@ class QSysCore extends IPSModule
     // ---------------------------------------------------------------------
 
     // Baut eine JSON-RPC-Nachricht und schickt sie \0-terminiert an den Socket.
-    public function SendRPC($method, $params, $withId = true)
+    // Absichtlich private: $params ist je nach Methode Array, Objekt, Zahl oder
+    // String und laesst sich nicht typisieren -- Symcon verlangt an oeffentlichen
+    // Modulfunktionen aber Parametertypen. Nach aussen fuehrt RawRequest().
+    private function SendRPC($method, $params, $withId = true)
     {
         $msg = array('jsonrpc' => '2.0', 'method' => $method);
         if ($withId) {
@@ -604,16 +600,35 @@ class QSysCore extends IPSModule
     // Online-Status / Reconnect (aus Bose-Device uebernommen, gekuerzt)
     // ---------------------------------------------------------------------
 
+    // Erreichbarkeit per TCP-Connect statt ICMP: Sys_Ping braucht CAP_NET_RAW,
+    // das dem Symcon-Prozess auf der Catan C1 fehlt -- dort scheitert es mit
+    // "Cannot create socket" und schrieb den Fehler alle 30 s ins Log. Der
+    // TCP-Test kommt ohne Sonderrechte aus und prueft gleich den richtigen Port.
+    private function HostReachable($host, $port, $timeoutMs = 1000)
+    {
+        $fp = @fsockopen($host, $port, $errno, $errstr, max(0.2, $timeoutMs / 1000));
+        if ($fp === false) {
+            return false;
+        }
+        @fclose($fp);
+        return true;
+    }
+
     public function RefreshOnlineStatus()
     {
         $pingTimeouts = (int) $this->GetBuffer('pingTimeouts');
         $connId = $this->GetConnectionID();
         $host = ($connId > 0) ? (string) @IPS_GetProperty($connId, 'Host') : '';
+        $port = ($connId > 0) ? (int) @IPS_GetProperty($connId, 'Port') : 0;
         $state = $this->SocketState();
         $pingOk = false;
 
-        if (strlen($host) > 0) {
-            $pingOk = Sys_Ping($host, 1000);
+        if ($state == 102) {
+            // Verbunden ist der beste Erreichbarkeitsnachweis -- nicht zusaetzlich anklopfen.
+            $pingOk = true;
+            $pingTimeouts = 0;
+        } elseif (strlen($host) > 0) {
+            $pingOk = $this->HostReachable($host, $port > 0 ? $port : 1710);
             $pingTimeouts = $pingOk ? 0 : ($pingTimeouts + 1);
         } else {
             $pingTimeouts = 4;

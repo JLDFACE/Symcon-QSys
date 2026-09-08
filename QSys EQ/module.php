@@ -440,7 +440,7 @@ class QSysEQ extends IPSModule
      * Biquad-Koeffizienten nach RBJ Audio EQ Cookbook.
      * Rueckgabe: array(b0,b1,b2,a0,a1,a2)
      */
-    public static function Coeffs($type, $f0, $gainDB, $q, $fs)
+    public static function Coeffs(int $type, float $f0, float $gainDB, float $q, float $fs)
     {
         if ($q <= 0) { $q = 0.001; }
         if ($f0 <= 0) { $f0 = 1.0; }
@@ -479,7 +479,7 @@ class QSysEQ extends IPSModule
     }
 
     // Betragsgang eines Biquads bei Frequenz f in dB.
-    public static function MagnitudeDB($co, $f, $fs)
+    public static function MagnitudeDB(array $co, float $f, float $fs)
     {
         list($b0, $b1, $b2, $a0, $a1, $a2) = $co;
         $w = 2.0 * M_PI * $f / $fs;
@@ -512,7 +512,7 @@ class QSysEQ extends IPSModule
      *   Low-Shelf   H = A * (A-u^2 + j*u*sqrt(A)/Q) / (1-A*u^2 + j*u*sqrt(A)/Q)
      *   High-Shelf  H = A * (1-A*u^2 + j*u*sqrt(A)/Q) / (A-u^2 + j*u*sqrt(A)/Q)
      */
-    public static function MagnitudeAnalogDB($type, $f, $f0, $gainDB, $q)
+    public static function MagnitudeAnalogDB(int $type, float $f, float $f0, float $gainDB, float $q)
     {
         if ($q <= 0) { $q = 0.001; }
         if ($f0 <= 0) { $f0 = 1.0; }
@@ -547,7 +547,7 @@ class QSysEQ extends IPSModule
      * $fs wird nicht mehr gebraucht (analoger Prototyp), bleibt der Signatur
      * wegen erhalten.
      */
-    public static function Curve($bands, $master, $freqs, $fs = 48000)
+    public static function Curve(array $bands, float $master, array $freqs, float $fs = 48000)
     {
         $out = array();
         foreach ($freqs as $f) { $out[] = (float) $master; }
@@ -565,7 +565,7 @@ class QSysEQ extends IPSModule
         return $out;
     }
 
-    public static function LogFreqs($from, $to, $count)
+    public static function LogFreqs(float $from, float $to, int $count)
     {
         $f = array();
         $lf = log10($from); $lt = log10($to);
