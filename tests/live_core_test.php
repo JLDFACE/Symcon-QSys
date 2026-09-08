@@ -41,6 +41,10 @@ function IPS_LogMessage($s, $m) {}
 function GetValue($id) { return null; } function SetValue($id, $v) {}
 function IPS_Sleep($ms) { usleep($ms * 1000); }
 function Sys_Ping($host, $timeout) { return true; }
+// Kinder ziehen ihre Core-Verbindung in ApplyChanges nach; im Test gibt es keine
+// Instanzliste, eine leere Antwort laesst EnsureCoreConnection sofort aussteigen.
+function IPS_GetInstanceListByModuleID($guid) { return array(); }
+function IPS_ConnectInstance($id, $parentId) { return true; }
 
 abstract class IPSModule
 {

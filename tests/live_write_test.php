@@ -61,6 +61,10 @@ function IPS_InstanceExists($id) { return true; } function IPS_HasChanges($id) {
 function IPS_SemaphoreEnter($n, $ms) { return true; } function IPS_SemaphoreLeave($n) { return true; }
 function IPS_LogMessage($s, $m) {} function IPS_Sleep($ms) { usleep($ms * 1000); }
 function Sys_Ping($h, $t) { return true; }
+// Kinder ziehen ihre Core-Verbindung in ApplyChanges nach; im Test gibt es keine
+// Instanzliste, eine leere Antwort laesst EnsureCoreConnection sofort aussteigen.
+function IPS_GetInstanceListByModuleID($guid) { return array(); }
+function IPS_ConnectInstance($id, $parentId) { return true; }
 $GLOBALS['varstore'] = array();
 function GetValue($id) { return isset($GLOBALS['varstore'][$id]) ? $GLOBALS['varstore'][$id] : null; }
 function SetValue($id, $v) { $GLOBALS['varstore'][$id] = $v; }

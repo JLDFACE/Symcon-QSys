@@ -43,9 +43,29 @@ class QSysGain extends IPSModule
         IPS_SetVariableProfileAssociation('QSysMute', true, 'Stumm', 'Mute', 0xff0000);
     }
 
+    // ConnectParent() in Create() greift nur, wenn Symcon die Instanz selbst ueber
+    // den Instanz-Dialog anlegt. Per Skript oder ueber den Configurator erzeugte
+    // Instanzen bleiben auf ConnectionID 0 und haengen an keinem Core -- dann gibt
+    // es kein Abo, keinen Fan-out und keine Werte, obwohl die Instanz auf Status 102
+    // steht (auf der Catan C1 mit Symcon 9.0 verifiziert). Deshalb hier nachziehen.
+    private function EnsureCoreConnection()
+    {
+        $inst = @IPS_GetInstance($this->InstanceID);
+        if (is_array($inst) && (int) $inst['ConnectionID'] > 0) {
+            return;
+        }
+        $cores = @IPS_GetInstanceListByModuleID(self::CORE_GUID);
+        if (!is_array($cores) || count($cores) !== 1) {
+            return; // kein oder mehrere Cores -- nicht raten, das muss der Anwender entscheiden
+        }
+        @IPS_ConnectInstance($this->InstanceID, $cores[0]);
+    }
+
     public function ApplyChanges()
     {
         parent::ApplyChanges();
+
+        $this->EnsureCoreConnection();
 
         $min = (float) $this->ReadPropertyFloat('MinDB');
         $max = (float) $this->ReadPropertyFloat('MaxDB');
