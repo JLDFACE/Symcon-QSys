@@ -36,6 +36,11 @@ class QSysCore extends IPSModule
 
         $this->RequireParent('{3CFF0FD9-E306-41DB-9B5A-9D06D38576C3}'); // Client Socket
 
+        // QRC liegt fest auf TCP 1710. Direkt bei der Anlage vorbelegen, damit im
+        // Socket-Dialog kein leeres Portfeld steht (ohne ApplyChanges, die Instanz
+        // wird gerade erst erzeugt).
+        $this->PresetSocketPort(false);
+
         if (!IPS_VariableProfileExists('QSysOnline')) {
             IPS_CreateVariableProfile('QSysOnline', 0);
         }
@@ -68,8 +73,6 @@ class QSysCore extends IPSModule
         $this->SetBuffer('LastDeviceResponse', '0');
         $this->SetBuffer('ReconnectBackoffUntil', '0');
         $this->SetBuffer('ClosedByPing', '0');
-        $this->SetBuffer('LastConnectionID', '0');
-        $this->SetBuffer('PortInitialized', '0');
         $this->SetBuffer('RpcId', '0');
     }
 
@@ -77,23 +80,9 @@ class QSysCore extends IPSModule
     {
         parent::ApplyChanges();
 
-        // Port-Default 1710 an der ClientSocket setzen (nur beim ersten Mal / neuer Verbindung)
-        $connId = $this->GetConnectionID();
-        if ($connId > 0) {
-            $lastConnId = (int) $this->GetBuffer('LastConnectionID');
-            if ($lastConnId !== $connId) {
-                $this->SetBuffer('LastConnectionID', (string) $connId);
-                $this->SetBuffer('PortInitialized', '0');
-            }
-            if ((int) $this->GetBuffer('PortInitialized') === 0) {
-                $port = @IPS_GetProperty($connId, 'Port');
-                if (empty($port) || (int) $port === 0) {
-                    IPS_SetProperty($connId, 'Port', 1710);
-                    IPS_ApplyChanges($connId);
-                }
-                $this->SetBuffer('PortInitialized', '1');
-            }
-        }
+        // Port-Default 1710 an der ClientSocket setzen, solange dort keiner steht.
+        // Idempotent: ein selbst eingetragener Port wird nie ueberschrieben.
+        $this->PresetSocketPort(true);
 
         $this->SetBuffer('CGApplied', '0');
         $this->SetBuffer('incomingData', '');
@@ -102,6 +91,25 @@ class QSysCore extends IPSModule
         $this->SetTimerInterval('PollStatus', 30000);
         $this->SetTimerInterval('CheckOnlineStatus', 30000);
         $this->SetTimerInterval('FlushPending', 1000);
+    }
+
+    // Belegt den Port der uebergeordneten Client-Socket mit 1710 (QRC), falls dort
+    // noch keiner eingetragen ist. $apply = true stoesst zusaetzlich IPS_ApplyChanges
+    // an der Socket an, damit die Aenderung sofort greift.
+    private function PresetSocketPort($apply)
+    {
+        $connId = $this->GetConnectionID();
+        if ($connId <= 0) {
+            return;
+        }
+        $port = @IPS_GetProperty($connId, 'Port');
+        if (!empty($port) && (int) $port !== 0) {
+            return;
+        }
+        @IPS_SetProperty($connId, 'Port', 1710);
+        if ($apply) {
+            @IPS_ApplyChanges($connId);
+        }
     }
 
     public function GetConnectionID()

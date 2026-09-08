@@ -2,7 +2,7 @@
     "elements": [
         {
             "type": "Label",
-            "caption": "Verbindung zum Q-SYS Core über QRC (TCP-Port 1710). Der Port wird an der übergeordneten Client-Socket-Instanz automatisch auf 1710 gesetzt, sofern noch keiner eingetragen ist."
+            "caption": "Verbindung zum Q-SYS Core über QRC. Der Port ist bei QRC fest 1710 und wird an der übergeordneten Client-Socket-Instanz automatisch vorbelegt — dort nur noch den Host (IP des Cores) eintragen."
         },
         {
             "type": "ExpansionPanel",

@@ -114,8 +114,9 @@ ohne Dauerlast. Variablen werden nur bei tatsächlicher Wertänderung geschriebe
 ## Netzwerk & Port
 
 - Verbindung über eine **Client-Socket-Instanz**
-- Der Port wird beim ersten `ApplyChanges` automatisch auf **1710** gesetzt,
-  sofern noch keiner eingetragen ist; Host und Port bleiben frei änderbar.
+- Der Port ist bei QRC fest **1710** und wird schon beim Anlegen der
+  Core-Instanz an der Client-Socket vorbelegt, sofern dort noch keiner steht;
+  Host und Port bleiben frei änderbar.
 
 ---
 
