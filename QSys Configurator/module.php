@@ -303,7 +303,10 @@ class QSysConfigurator extends IPSModule
                         $cfg['MinDB'] = (float) $c['ValueMin'];
                     }
                     if (isset($c['ValueMax'])) {
-                        $cfg['MaxDB'] = (float) $c['ValueMax'];
+                        // Bei 0 dB ist Schluss: der Fader soll regeln, nicht
+                        // verstaerken. Designs melden oft +20 dB Kopffreiheit,
+                        // die dann den halben Reglerweg fressen wuerde.
+                        $cfg['MaxDB'] = min(0.0, (float) $c['ValueMax']);
                     }
                     break;
                 }

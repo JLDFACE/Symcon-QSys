@@ -37,7 +37,9 @@ class QSysGain extends IPSModule
         $this->RegisterPropertyString('GainControl', 'gain');
         $this->RegisterPropertyString('MuteControl', 'mute');
         $this->RegisterPropertyFloat('MinDB', -100.0);
-        $this->RegisterPropertyFloat('MaxDB', 20.0);
+        // 0 dB ist Schluss: der Fader regelt, er verstaerkt nicht. Wer
+        // Kopffreiheit braucht, hebt MaxDB an der Instanz an.
+        $this->RegisterPropertyFloat('MaxDB', 0.0);
         $this->RegisterPropertyFloat('Ramp', 0.0);
         $this->RegisterPropertyString('Curve', 'iec');   // iec | power | linear
         $this->RegisterPropertyFloat('PowerK', 3.0);     // nur bei Curve = power

@@ -54,7 +54,11 @@ liegt. Das Modul rechnet deshalb selbst um, über `Curve` wählbar:
 | `power` — Audio-Taper, Amplitude = Position^k (k = 3) | −7,5 dB | −18 dB | −36 dB | MinDB |
 | `linear` — linear in dB über MinDB…MaxDB (altes Verhalten) | −25 dB | −50 dB | −75 dB | MinDB |
 
-Alle Kennlinien hängen bei 100 % an `MaxDB` und bei 0 % an `MinDB`. Geschrieben
+Alle Kennlinien hängen bei 100 % an `MaxDB` und bei 0 % an `MinDB`. **`MaxDB`
+ist per Vorgabe 0 dB** — der Fader regelt, er verstärkt nicht; der Configurator
+deckelt den Wert aus dem Design entsprechend. Wer Kopffreiheit braucht, hebt
+`MaxDB` an der Instanz an, verschiebt damit aber die Einheitsverstärkung nach
+unten (bei +20 dB läge sie bei 50 % Reglerweg). Geschrieben
 wird immer der dB-Wert, gelesen wird er ebenso zurückgerechnet — Hin- und
 Rückweg passen also zueinander.
 
@@ -174,7 +178,7 @@ Component.Get), Change-Normalisierung, ChangeGroup-/AutoPoll-Aufbau und der
 Forward-Pfad, dazu beide Router-Betriebsarten (Router und Selector inkl.
 Aufbau der Quellenliste aus den Choices) und die Filtermathematik des EQ
 (Peaking/Shelf, Summenkurve, Grenzfaelle, analoger Verlauf inkl. der Regression,
-dass ein hohes Band oben nicht zusammenbricht). Stand: **93 Pruefungen, 0 Fehler**.
+dass ein hohes Band oben nicht zusammenbricht). Stand: **94 Pruefungen, 0 Fehler**.
 
 ### Gegen einen echten Core -- lesend
 ```bash

@@ -593,10 +593,15 @@ $g = newGain(array_merge($basis, array('Curve' => 'linear')));
 check(gesendetesDb($g, 50) === -50.0, 'Linear: 50 % = -50 dB (altes Verhalten)');
 check(gesendetesDb($g, 75) === -25.0, 'Linear: 75 % = -25 dB');
 
-// --- Kennlinie haengt bei 100 % am Maximum, auch wenn das ueber 0 dB liegt ---
+// --- Kennlinie haengt bei 100 % am Maximum ---
 $g = newGain(array_merge($basis, array('Curve' => 'iec', 'MaxDB' => 20.0)));
 check(gesendetesDb($g, 100) === 20.0, 'IEC: 100 % = MaxDB, auch bei +20 dB');
 check(gesendetesDb($g, 50)  === 0.0,  'IEC: 50 % liegt 20 dB unter MaxDB');
+
+// --- Vorgabe: der Fader endet bei 0 dB, er verstaerkt nicht ---
+$g = new QSysGain(91);
+$g->Create();
+check((float) $g->ReadPropertyFloat('MaxDB') === 0.0, 'Vorgabe MaxDB ist 0 dB');
 
 echo "\n== QSys EQ (Filtermathematik) ==\n";
 
