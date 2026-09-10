@@ -90,12 +90,23 @@ Snapshot-Bank laden/speichern (`Snapshot.Load`/`Save`, Bank + Nummer + Ramp).
 ### QSys Trigger
 Momentane Tasten (Page, Bell, Mute-All …): ein Klick sendet `Value = 1`.
 
+### QSys Text Controller
+Text-Controls eines **Q-SYS Text Controllers**. Diese Komponenten melden sich
+über QRC als Typ `device_controller_script`; ihr Nutz-Control ist ein
+Text-Control, in FACE-Designs üblicherweise `dd.routing`. Führt das Control eine
+Auswahlliste (`Choices`), entsteht die Variable **„Auswahl"** mit einem
+instanzeigenen Profil — 1-basiert wie beim Router, damit die Bedienung über alle
+Module gleich bleibt. Ohne Auswahlliste bleibt es bei der beschreibbaren
+Variable **„Text"**. Geschrieben wird immer der Text selbst
+(`Component.Set` mit `Value = "<Text>"`, am Core verifiziert).
+
 ### QSys Configurator
 Liest das **laufende Design** live aus (`Component.GetComponents` /
 `Component.GetControls`) und legt per Klick passende Instanzen an — **Gain**-,
-**Router**-, **Selector**- und **EQ**-Komponenten werden erkannt und passend
-vorbelegt (beim Selector mit den Quellennamen aus den `label.N`-Controls, beim
-EQ mit der Bandzahl), jedes einzelne Control ist als generisches *QSys Control*
+**Router**-, **Selector**-, **EQ**- und **Text-Controller**-Komponenten werden
+erkannt und passend vorbelegt (beim Selector mit den Quellennamen aus den
+`label.N`-Controls, beim EQ mit der Bandzahl, beim Text Controller mit
+`dd.routing` und dessen Auswahlliste), jedes einzelne Control ist als generisches *QSys Control*
 anlegbar. Der Configurator wird **unter einen QSys Core** gehängt
 und nutzt dessen Host/Port über eine eigene, kurzlebige Abfrageverbindung.
 

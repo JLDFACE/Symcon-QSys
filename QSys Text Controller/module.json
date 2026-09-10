@@ -1,0 +1,11 @@
+{
+  "id": "{7C1E4B92-5A3D-4E8F-9B24-3F6D8A0C57E1}",
+  "name": "QSys Text Controller",
+  "aliases": ["Q-SYS Text Controller", "Text Controller", "QSys TC"],
+  "type": 3,
+  "vendor": "FACE GmbH",
+  "parentRequirements": ["{747545EE-CA0F-490F-8F42-6D240F6CAEB4}"],
+  "childRequirements": [],
+  "implemented": ["{A322AA34-4023-435D-B023-1BD80BAB9E22}"],
+  "prefix": "QSYS"
+}

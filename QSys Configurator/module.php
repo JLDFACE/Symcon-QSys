@@ -21,6 +21,12 @@ class QSysConfigurator extends IPSModule
     const GUID_ROUTER     = '{206CCE6E-A80E-4032-AB12-7C060823FD2D}';
     const GUID_SNAPSHOT   = '{BD1426DA-330A-46B7-BA7D-F6CE5C7E627F}';
     const GUID_EQ         = '{2819CDAC-AE34-4923-B2A5-B535A190A509}';
+    const GUID_TEXTCTRL   = '{7C1E4B92-5A3D-4E8F-9B24-3F6D8A0C57E1}';
+
+    // Q-SYS Text Controller melden sich als dieser Komponententyp; ihr Nutz-Control
+    // ist ein Text-Control, im SKUZ-Design "dd.routing".
+    const TEXTCTRL_TYPE    = 'device_controller_script';
+    const TEXTCTRL_CONTROL = 'dd.routing';
 
     // Obergrenze fuer Control-Zeilen im Formular. Symcon bricht die Ausgabe bei
     // 1 MB ab; ~4400 Zeilen reissen das sicher, 800 bleiben deutlich darunter.
@@ -267,7 +273,27 @@ class QSysConfigurator extends IPSModule
         $create = array();
         $lt = strtolower($type . ' ' . $name);
 
-        if (strpos($lt, 'gain') !== false) {
+        if (strtolower($type) === self::TEXTCTRL_TYPE) {
+            // Auswahlliste mitgeben, wenn die Controls schon geladen sind; das Modul
+            // zieht sie sonst selbst nach, sobald der erste Wert vom Core kommt.
+            $cfg = array(
+                'ComponentName' => $name,
+                'ControlName' => self::TEXTCTRL_CONTROL,
+                'AutoChoices' => true
+            );
+            foreach ($controls as $c) {
+                if (isset($c['Name']) && (string) $c['Name'] === self::TEXTCTRL_CONTROL
+                    && isset($c['Choices']) && is_array($c['Choices'])) {
+                    $labels = array();
+                    foreach ($c['Choices'] as $entry) {
+                        $labels[] = (string) $entry;
+                    }
+                    $cfg['Choices'] = json_encode($labels);
+                    break;
+                }
+            }
+            $create[] = array('moduleID' => self::GUID_TEXTCTRL, 'name' => $name, 'configuration' => $cfg);
+        } elseif (strpos($lt, 'gain') !== false) {
             // dB-Bereich aus dem Design uebernehmen statt zu raten: der Core meldet
             // ValueMin/ValueMax am gain-Control (z. B. -100..0 statt der Annahme -100..+20).
             $cfg = array('ComponentName' => $name);
@@ -435,7 +461,7 @@ class QSysConfigurator extends IPSModule
 
     private function FindComponentInstance($componentName)
     {
-        foreach (array(self::GUID_GAIN, self::GUID_ROUTER, self::GUID_SNAPSHOT) as $guid) {
+        foreach (array(self::GUID_GAIN, self::GUID_ROUTER, self::GUID_SNAPSHOT, self::GUID_EQ, self::GUID_TEXTCTRL) as $guid) {
             $ids = @IPS_GetInstanceListByModuleID($guid);
             if (!is_array($ids)) {
                 continue;

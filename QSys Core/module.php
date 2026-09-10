@@ -64,6 +64,7 @@ class QSysCore extends IPSModule
         $this->SetBuffer('incomingData', '');
         $this->SetBuffer('Subs', '[]');
         $this->SetBuffer('CGApplied', '0');
+        $this->SetBuffer('CGPending', '{}');
         $this->SetBuffer('pingTimeouts', '0');
         $this->SetBuffer('LastDeviceResponse', '0');
         $this->SetBuffer('ReconnectBackoffUntil', '0');
@@ -283,6 +284,68 @@ class QSysCore extends IPSModule
         }
     }
 
+    // Wie SendRPC, merkt sich aber, welche Abos an dieser Request-ID haengen.
+    // Lehnt der Core ein Control ab, laesst sich die Antwort so dem Abo zuordnen.
+    private function SendTrackedAdd($method, $params, $subKeys)
+    {
+        $id = $this->NextId();
+        $msg = array('jsonrpc' => '2.0', 'id' => $id, 'method' => $method, 'params' => $params);
+        if (!$this->SendRaw(json_encode($msg, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE))) {
+            return;
+        }
+        $pending = json_decode((string) $this->GetBuffer('CGPending'), true);
+        if (!is_array($pending)) {
+            $pending = array();
+        }
+        $pending[(string) $id] = $subKeys;
+        $this->SetBuffer('CGPending', json_encode($pending));
+    }
+
+    private function ClearPending($id)
+    {
+        $pending = json_decode((string) $this->GetBuffer('CGPending'), true);
+        if (!is_array($pending) || !isset($pending[$id])) {
+            return;
+        }
+        unset($pending[$id]);
+        $this->SetBuffer('CGPending', json_encode($pending));
+    }
+
+    // Verwirft die Abos, die an einer abgelehnten ChangeGroup-Anfrage hingen, und
+    // stoesst einen Neuaufbau an. Ein einziges ungueltiges Control brachte sonst die
+    // komplette ChangeGroup zu Fall und damit alle Push-Updates: der Core antwortet
+    // auf AddComponentControl mit Code 8 und danach auf AutoPoll/Poll mit Code 6
+    // ("Change group does not exist"). Typischer Ausloeser ist eine geloeschte
+    // Instanz, deren "unsub" nie kam -- ihr totes Abo bleibt im Puffer stehen.
+    private function DropRejectedSubs($id, $errText)
+    {
+        $pending = json_decode((string) $this->GetBuffer('CGPending'), true);
+        if (!is_array($pending) || !isset($pending[$id])) {
+            return false;
+        }
+        $keys = (array) $pending[$id];
+        unset($pending[$id]);
+        $this->SetBuffer('CGPending', json_encode($pending));
+
+        $new = array();
+        $dropped = array();
+        foreach ($this->GetSubs() as $row) {
+            $key = $this->SubKey($row['Component'], $row['Control']);
+            if (in_array($key, $keys, true)) {
+                $dropped[] = (((string) $row['Component']) !== '' ? $row['Component'] . '/' : '') . $row['Control'];
+                continue;
+            }
+            $new[] = $row;
+        }
+        if (count($dropped) === 0) {
+            return false;
+        }
+        $this->SaveSubs($new);
+        $this->SetBuffer('CGApplied', '0'); // ohne das kaputte Abo neu aufbauen
+        $this->LogMessage('ChangeGroup: Abo verworfen (' . implode(', ', $dropped) . '), Core meldet: ' . $errText, KL_WARNING);
+        return true;
+    }
+
     // Baut die ChangeGroup am Core neu auf und aktiviert AutoPoll.
     private function ApplyChangeGroup()
     {
@@ -318,17 +381,27 @@ class QSysCore extends IPSModule
             }
         }
 
+        $this->SetBuffer('CGPending', '{}');
+
         foreach ($byComponent as $c => $controls) {
-            $this->SendRPC('ChangeGroup.AddComponentControl', array(
+            $keys = array();
+            foreach ($controls as $ctrl) {
+                $keys[] = $this->SubKey($c, $ctrl['Name']);
+            }
+            $this->SendTrackedAdd('ChangeGroup.AddComponentControl', array(
                 'Id' => self::CHANGEGROUP_ID,
                 'Component' => array('Name' => $c, 'Controls' => $controls)
-            ));
+            ), $keys);
         }
         if (count($named) > 0) {
-            $this->SendRPC('ChangeGroup.AddControl', array(
+            $keys = array();
+            foreach ($named as $ctrl) {
+                $keys[] = $this->SubKey('', $ctrl);
+            }
+            $this->SendTrackedAdd('ChangeGroup.AddControl', array(
                 'Id' => self::CHANGEGROUP_ID,
                 'Controls' => $named
-            ));
+            ), $keys);
         }
 
         // AutoPoll aktivieren (Core pusht Aenderungen) + einmal sofort pollen (Erst-Sync).
@@ -414,6 +487,9 @@ class QSysCore extends IPSModule
 
         // Antwort auf einen Request
         if (array_key_exists('result', $msg)) {
+            if (isset($msg['id'])) {
+                $this->ClearPending((string) $msg['id']);
+            }
             $result = $msg['result'];
 
             if (is_array($result)) {
@@ -452,6 +528,15 @@ class QSysCore extends IPSModule
         if (isset($msg['error'])) {
             $err = $msg['error'];
             $txt = is_array($err) ? json_encode($err) : (string) $err;
+
+            // Abgelehntes Abo aussortieren statt die ganze ChangeGroup zu verlieren
+            if (isset($msg['id']) && $this->DropRejectedSubs((string) $msg['id'], $txt)) {
+                return;
+            }
+            // "Change group does not exist" (Code 6): Gruppe fehlt am Core -> neu aufbauen
+            if (is_array($err) && isset($err['code']) && (int) $err['code'] === 6) {
+                $this->SetBuffer('CGApplied', '0');
+            }
             $this->LogMessage('QRC error: ' . $txt, KL_WARNING);
         }
     }

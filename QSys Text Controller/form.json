@@ -1,0 +1,35 @@
+{
+    "elements": [
+        {
+            "type": "Label",
+            "caption": "Bindet ein Text-Control eines Q-SYS Text Controllers an eine Variable. Text Controller melden sich über QRC als Komponententyp \"device_controller_script\"; ihre Nutz-Controls sind Text-Controls, im SKUZ-Design z. B. \"dd.routing\"."
+        },
+        {
+            "type": "ValidationTextBox",
+            "name": "ComponentName",
+            "caption": "Komponente (z. B. TC_Routing_Saal)"
+        },
+        {
+            "type": "ValidationTextBox",
+            "name": "ControlName",
+            "caption": "Control"
+        },
+        {
+            "type": "Label",
+            "caption": "Führt das Control eine Auswahlliste, entsteht die Variable „Auswahl\" mit einem instanzeigenen Profil. Ohne Auswahlliste bleibt nur die beschreibbare Variable „Text\"."
+        },
+        {
+            "type": "CheckBox",
+            "name": "AutoChoices",
+            "caption": "Auswahlliste automatisch vom Core übernehmen"
+        }
+    ],
+    "actions": [
+        {
+            "type": "Button",
+            "caption": "Jetzt abfragen",
+            "onClick": "QSYS_SyncText($id);"
+        }
+    ],
+    "status": []
+}
