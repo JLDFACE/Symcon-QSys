@@ -146,6 +146,7 @@ class IPSModule
         elseif (isset($this->identToVid[$ident])) { unset($GLOBALS['__vars'][$this->identToVid[$ident]]); unset($this->identToVid[$ident]); }
     }
     public function EnableAction($ident) {}
+    public function DisableAction($ident) {}
     public function GetIDForIdent($ident) { return isset($this->identToVid[$ident]) ? $this->identToVid[$ident] : false; }
     public function SetValue($ident, $value) { if (isset($this->identToVid[$ident])) { $GLOBALS['__vars'][$this->identToVid[$ident]] = $value; } }
     public function GetValue($ident) { return isset($this->identToVid[$ident]) ? $GLOBALS['__vars'][$this->identToVid[$ident]] : null; }
@@ -172,6 +173,7 @@ class IPSModule
 require __DIR__ . '/../QSys Core/module.php';
 require __DIR__ . '/../QSys Router/module.php';
 require __DIR__ . '/../QSys EQ/module.php';
+require __DIR__ . '/../QSys Gain/module.php';
 
 // ---- winziges Test-Framework ----
 $GLOBALS['__pass'] = 0;
@@ -518,6 +520,83 @@ $r->ReceiveData(json_encode(array(
 )));
 check($r->TestGetVar('Source') === 3, 'Resync laesst die Werte unangetastet');
 
+
+
+echo "\n== QSys Gain (Fader-Kennlinie) ==\n";
+
+function newGain($props)
+{
+    $g = new QSysGain(90);
+    $g->Create();
+    foreach ($props as $k => $v) { $g->SetProperty($k, $v); }
+    $g->ApplyChanges();
+    $g->sentToParent = array();
+    return $g;
+}
+
+// Welchen dB-Wert schickt das Modul fuer eine Reglerstellung an den Core?
+function gesendetesDb(QSysGain $g, $percent)
+{
+    $g->sentToParent = array();
+    $g->SetLevelPercent($percent);
+    foreach ($g->sentToParent as $p) {
+        $b = $p['Buffer'];
+        if (isset($b['Type']) && $b['Type'] === 'rpc' && $b['Method'] === 'Component.Set') {
+            $c = $b['Params']['Controls'][0];
+            if (isset($c['Value'])) { return (float) $c['Value']; }
+        }
+    }
+    return null;
+}
+
+// Welchen Prozentwert macht das Modul aus einem dB-Wert vom Core?
+function empfangenesProzent(QSysGain $g, $db)
+{
+    $g->ReceiveData(json_encode(array(
+        'DataID' => '{A322AA34-4023-435D-B023-1BD80BAB9E22}',
+        'Buffer' => array('Changes' => array(
+            array('Component' => 'Gain_Saal', 'Name' => 'gain', 'Value' => $db, 'String' => $db . 'dB', 'Position' => 0.0)
+        ))
+    )));
+    return $g->TestGetVar('LevelPercent');
+}
+
+$basis = array('ComponentName' => 'Gain_Saal', 'GainControl' => 'gain', 'MuteControl' => 'mute',
+               'MinDB' => -100.0, 'MaxDB' => 0.0, 'Ramp' => 0.0);
+
+// --- IEC: die Stuetzpunkte der Norm ---
+$g = newGain(array_merge($basis, array('Curve' => 'iec')));
+check(gesendetesDb($g, 100) === 0.0,   'IEC: 100 % = 0 dB');
+check(gesendetesDb($g, 75)  === -10.0, 'IEC: 75 % = -10 dB');
+check(gesendetesDb($g, 50)  === -20.0, 'IEC: 50 % = -20 dB');
+check(gesendetesDb($g, 30)  === -30.0, 'IEC: 30 % = -30 dB');
+check(gesendetesDb($g, 15)  === -40.0, 'IEC: 15 % = -40 dB');
+check(gesendetesDb($g, 0)   === -100.0, 'IEC: 0 % faehrt auf MinDB');
+
+// --- IEC: Hin- und Rueckweg muessen zueinander passen ---
+$abw = 0;
+foreach (array(0, 5, 10, 20, 25, 40, 50, 60, 75, 90, 100) as $pz) {
+    $db = gesendetesDb($g, $pz);
+    $zurueck = empfangenesProzent($g, $db);
+    if (abs($zurueck - $pz) > 1) { $abw++; }
+}
+check($abw === 0, 'IEC: Prozent -> dB -> Prozent bleibt stabil (11 Stuetzstellen)');
+
+// --- Potenzkennlinie ---
+$g = newGain(array_merge($basis, array('Curve' => 'power', 'PowerK' => 3.0)));
+check(gesendetesDb($g, 100) === 0.0, 'Potenz: 100 % = 0 dB');
+check(abs(gesendetesDb($g, 50) - (-18.1)) < 0.1, 'Potenz k=3: 50 % = -18,1 dB');
+check(abs(gesendetesDb($g, 10) - (-60.0)) < 0.1, 'Potenz k=3: 10 % = -60 dB');
+
+// --- lineares Verhalten bleibt erhalten ---
+$g = newGain(array_merge($basis, array('Curve' => 'linear')));
+check(gesendetesDb($g, 50) === -50.0, 'Linear: 50 % = -50 dB (altes Verhalten)');
+check(gesendetesDb($g, 75) === -25.0, 'Linear: 75 % = -25 dB');
+
+// --- Kennlinie haengt bei 100 % am Maximum, auch wenn das ueber 0 dB liegt ---
+$g = newGain(array_merge($basis, array('Curve' => 'iec', 'MaxDB' => 20.0)));
+check(gesendetesDb($g, 100) === 20.0, 'IEC: 100 % = MaxDB, auch bei +20 dB');
+check(gesendetesDb($g, 50)  === 0.0,  'IEC: 50 % liegt 20 dB unter MaxDB');
 
 echo "\n== QSys EQ (Filtermathematik) ==\n";
 

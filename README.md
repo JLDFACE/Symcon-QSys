@@ -39,9 +39,24 @@ Komponente leer = *Named Control* (`Control.Set`), sonst *Component-Control*.
 Typ wählbar (Zahl / Schalter / Text), optional mit Ramp.
 
 ### QSys Gain
-Lautstärke/Pegel einer Gain-Komponente: **dB**, **%** (über die Fader-Position,
-taper-korrekt) und **Mute**, mit **Ramp** für flüssige Fades. Optionaler
-KNX-Relativ-Dimm-Block (Start/Stop + Richtung).
+Lautstärke/Pegel einer Gain-Komponente: **dB**, **%** und **Mute**, mit **Ramp**
+für flüssige Fades. Optionaler KNX-Relativ-Dimm-Block (Start/Stop + Richtung).
+
+**Fader-Kennlinie.** Q-SYS bildet die Control-Position linear auf den dB-Bereich
+ab — es gibt dort keinen Taper. Am Core gemessen: bei einem −100…0-Gain sind
+75 % bereits −25 dB und 50 % sind −50 dB. Ein Prozentregler über die Position
+ist damit unbrauchbar, weil der ganze nutzbare Bereich in den obersten Prozenten
+liegt. Das Modul rechnet deshalb selbst um, über `Curve` wählbar:
+
+| Kennlinie | 75 % | 50 % | 25 % | 0 % |
+|---|---|---|---|---|
+| `iec` (Vorgabe) — IEC-60268-Skala | −10 dB | −20 dB | −33 dB | MinDB |
+| `power` — Audio-Taper, Amplitude = Position^k (k = 3) | −7,5 dB | −18 dB | −36 dB | MinDB |
+| `linear` — linear in dB über MinDB…MaxDB (altes Verhalten) | −25 dB | −50 dB | −75 dB | MinDB |
+
+Alle Kennlinien hängen bei 100 % an `MaxDB` und bei 0 % an `MinDB`. Geschrieben
+wird immer der dB-Wert, gelesen wird er ebenso zurückgerechnet — Hin- und
+Rückweg passen also zueinander.
 
 ### QSys Router
 Quellenumschaltung als Integer-Variable mit sprechenden Namen. Q-SYS kennt dafür
@@ -159,7 +174,7 @@ Component.Get), Change-Normalisierung, ChangeGroup-/AutoPoll-Aufbau und der
 Forward-Pfad, dazu beide Router-Betriebsarten (Router und Selector inkl.
 Aufbau der Quellenliste aus den Choices) und die Filtermathematik des EQ
 (Peaking/Shelf, Summenkurve, Grenzfaelle, analoger Verlauf inkl. der Regression,
-dass ein hohes Band oben nicht zusammenbricht). Stand: **79 Pruefungen, 0 Fehler**.
+dass ein hohes Band oben nicht zusammenbricht). Stand: **93 Pruefungen, 0 Fehler**.
 
 ### Gegen einen echten Core -- lesend
 ```bash

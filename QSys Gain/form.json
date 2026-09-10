@@ -57,6 +57,33 @@
             ]
         },
         {
+            "type": "Label",
+            "caption": "Kennlinie für „Pegel %“. Q-SYS bildet die Fader-Position linear auf dB ab — bei einem −100…0-Gain sind 75 % bereits −25 dB. Die IEC-Skala legt die halbe Reglerstellung auf −20 dB und lässt oben feine Auflösung."
+        },
+        {
+            "type": "RowLayout",
+            "items": [
+                {
+                    "type": "Select",
+                    "name": "Curve",
+                    "caption": "Kennlinie",
+                    "options": [
+                        { "caption": "IEC 60268 (empfohlen)", "value": "iec" },
+                        { "caption": "Potenz (Audio-Taper)", "value": "power" },
+                        { "caption": "Linear in dB", "value": "linear" }
+                    ]
+                },
+                {
+                    "type": "NumberSpinner",
+                    "name": "PowerK",
+                    "caption": "Exponent k (nur Potenz)",
+                    "digits": 1,
+                    "minimum": 1,
+                    "maximum": 6
+                }
+            ]
+        },
+        {
             "type": "ExpansionPanel",
             "caption": "KNX Dimm relativ (optional)",
             "expanded": false,

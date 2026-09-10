@@ -4,7 +4,20 @@
  * QSys Gain - Lautstaerke/Pegel einer Q-SYS Gain-Komponente (Typ 3)
  *
  * Steuert das "gain"-Control (dB) und das "mute"-Control einer Named Component.
- *  - Level in dB (direkt) und Level in % (ueber die Fader-Position 0..1, taper-korrekt)
+ *  - Level in dB (direkt) und Level in % ueber eine waehlbare Fader-Kennlinie
+ *
+ * Zur Kennlinie: Q-SYS bildet "Position" linear auf den dB-Bereich des Controls
+ * ab, es gibt dort keinen Taper (am Core gemessen: Position 0.75 = -25 dB bei
+ * einem -100..0-Gain). Ein Prozentregler ueber die Position ist damit unbrauchbar,
+ * weil der gesamte nutzbare Bereich in den obersten Prozenten liegt. Deshalb
+ * rechnet dieses Modul selbst um, wahlweise:
+ *
+ *   iec     IEC-60268-Skala (stueckweise linear, wie in Ardour/JACK gebraeuchlich).
+ *           Halbe Reglerstellung = -20 dB, 0 % laeuft bis zum Minimum durch.
+ *   power   Potenzkennlinie (Audio-Taper): Amplitude = Position^k, Vorgabe k = 3.
+ *   linear  linear in dB ueber MinDB..MaxDB -- das alte Verhalten.
+ *
+ * Alle Kennlinien haengen bei 100 % an MaxDB und bei 0 % an MinDB.
  *  - fluessige Fades ueber Component.Set mit Ramp
  *  - optionaler KNX-Relativ-Dimm-Block (uebernommen aus dem Bose-Gain)
  */
@@ -26,6 +39,8 @@ class QSysGain extends IPSModule
         $this->RegisterPropertyFloat('MinDB', -100.0);
         $this->RegisterPropertyFloat('MaxDB', 20.0);
         $this->RegisterPropertyFloat('Ramp', 0.0);
+        $this->RegisterPropertyString('Curve', 'iec');   // iec | power | linear
+        $this->RegisterPropertyFloat('PowerK', 3.0);     // nur bei Curve = power
 
         // KNX Relativ-Dimm (optional)
         $this->RegisterPropertyInteger('KnxDirectionVarID', 0);
@@ -190,6 +205,84 @@ class QSysGain extends IPSModule
         return true;
     }
 
+    // ---------------------------------------------------------- Fader-Kennlinie
+
+    // Stueckweise IEC-60268-Skala: dB (relativ zu 0) -> Prozent.
+    private function IecFwd($db)
+    {
+        if ($db < -70.0) { return 0.0; }
+        if ($db < -60.0) { return ($db + 70.0) * 0.25; }
+        if ($db < -50.0) { return ($db + 60.0) * 0.50 + 2.5; }
+        if ($db < -40.0) { return ($db + 50.0) * 0.75 + 7.5; }
+        if ($db < -30.0) { return ($db + 40.0) * 1.50 + 15.0; }
+        if ($db < -20.0) { return ($db + 30.0) * 2.00 + 30.0; }
+        return ($db + 20.0) * 2.50 + 50.0;
+    }
+
+    // Umkehrung: Prozent -> dB (relativ zu 0). Stueckweise linear, exakt invertierbar.
+    private function IecInv($p)
+    {
+        if ($p < 2.5)  { return $p / 0.25 - 70.0; }
+        if ($p < 7.5)  { return ($p - 2.5) / 0.50 - 60.0; }
+        if ($p < 15.0) { return ($p - 7.5) / 0.75 - 50.0; }
+        if ($p < 30.0) { return ($p - 15.0) / 1.50 - 40.0; }
+        if ($p < 50.0) { return ($p - 30.0) / 2.00 - 30.0; }
+        return ($p - 50.0) / 2.50 - 20.0;
+    }
+
+    private function PercentToDb($percent)
+    {
+        $min = (float) $this->ReadPropertyFloat('MinDB');
+        $max = (float) $this->ReadPropertyFloat('MaxDB');
+        $p = (float) $percent;
+        if ($p <= 0.0) { return $min; }
+        if ($p >= 100.0) { return $max; }
+
+        switch ((string) $this->ReadPropertyString('Curve')) {
+            case 'linear':
+                $db = $min + ($p / 100.0) * ($max - $min);
+                break;
+            case 'power':
+                $k = (float) $this->ReadPropertyFloat('PowerK');
+                if ($k <= 0.0) { $k = 3.0; }
+                $db = $max + 20.0 * $k * log10($p / 100.0);
+                break;
+            default: // iec
+                $db = $max + $this->IecInv($p);
+                break;
+        }
+        if ($db < $min) { $db = $min; }
+        if ($db > $max) { $db = $max; }
+        return $db;
+    }
+
+    private function DbToPercent($db)
+    {
+        $min = (float) $this->ReadPropertyFloat('MinDB');
+        $max = (float) $this->ReadPropertyFloat('MaxDB');
+        $db = (float) $db;
+        if ($db <= $min) { return 0; }
+        if ($db >= $max) { return 100; }
+
+        switch ((string) $this->ReadPropertyString('Curve')) {
+            case 'linear':
+                $span = $max - $min;
+                $p = ($span != 0.0) ? (($db - $min) / $span) * 100.0 : 0.0;
+                break;
+            case 'power':
+                $k = (float) $this->ReadPropertyFloat('PowerK');
+                if ($k <= 0.0) { $k = 3.0; }
+                $p = 100.0 * pow(10.0, ($db - $max) / (20.0 * $k));
+                break;
+            default: // iec
+                $p = $this->IecFwd($db - $max);
+                break;
+        }
+        if ($p < 0.0) { $p = 0.0; }
+        if ($p > 100.0) { $p = 100.0; }
+        return (int) round($p);
+    }
+
     public function SetLevelPercent(int $percent)
     {
         if ($percent < 0) {
@@ -198,8 +291,10 @@ class QSysGain extends IPSModule
         if ($percent > 100) {
             $percent = 100;
         }
-        // Prozent = Fader-Position (0..1), taper-korrekt vom Core interpretiert
-        $this->ComponentSet((string) $this->ReadPropertyString('GainControl'), 'Position', $percent / 100.0, true);
+        // Nicht mehr ueber "Position": die ist am Core linear in dB und damit als
+        // Regler unbrauchbar. Wir rechnen selbst um und schreiben den dB-Wert.
+        $this->ComponentSet((string) $this->ReadPropertyString('GainControl'), 'Value',
+            round($this->PercentToDb($percent), 1), true);
         return true;
     }
 
@@ -254,10 +349,11 @@ class QSysGain extends IPSModule
             }
             $name = (string) $c['Name'];
             if ($name === $gain) {
-                $this->SetValueIfChanged('Level', round((float) $c['Value'], 1));
-                if (isset($c['Position']) && $c['Position'] !== null) {
-                    $this->SetValueIfChanged('LevelPercent', (int) round(((float) $c['Position']) * 100));
-                }
+                $db = round((float) $c['Value'], 1);
+                $this->SetValueIfChanged('Level', $db);
+                // Prozent aus dB ueber dieselbe Kennlinie wie beim Schreiben --
+                // "Position" waere linear in dB und wuerde nicht dazu passen.
+                $this->SetValueIfChanged('LevelPercent', $this->DbToPercent($db));
             } elseif ($name === $mute && $mute !== '') {
                 $this->SetValueIfChanged('Mute', ((float) $c['Value']) >= 0.5);
             }
