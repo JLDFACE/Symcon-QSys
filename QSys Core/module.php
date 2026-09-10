@@ -65,6 +65,7 @@ class QSysCore extends IPSModule
         $this->SetBuffer('Subs', '[]');
         $this->SetBuffer('CGApplied', '0');
         $this->SetBuffer('CGPending', '{}');
+        $this->SetBuffer('CGBuilding', '0');
         $this->SetBuffer('pingTimeouts', '0');
         $this->SetBuffer('LastDeviceResponse', '0');
         $this->SetBuffer('ReconnectBackoffUntil', '0');
@@ -352,6 +353,21 @@ class QSysCore extends IPSModule
         if ($this->SocketState() != 102) {
             return;
         }
+        // Der Resync-Aufruf am Ende laesst Kinder ihr Abo schicken; deren AddSub
+        // ruft FlushPending, das sonst gleich wieder hier hereinliefe.
+        if ((int) $this->GetBuffer('CGBuilding') === 1) {
+            return;
+        }
+        $this->SetBuffer('CGBuilding', '1');
+        try {
+            $this->BuildChangeGroup();
+        } finally {
+            $this->SetBuffer('CGBuilding', '0');
+        }
+    }
+
+    private function BuildChangeGroup()
+    {
 
         // Optionaler Logon zuerst
         $user = (string) $this->ReadPropertyString('User');
@@ -420,6 +436,18 @@ class QSysCore extends IPSModule
         $this->SendRPC('StatusGet', 0);
 
         $this->SetBuffer('CGApplied', '1');
+
+        // Kinder auffordern, ihr Abo erneut zu schicken. Beim Hochlauf -- nach einem
+        // Modul-Update oder Kernel-Neustart -- laufen die Kinder los, bevor der Core
+        // verbunden ist; ihr Forward() steigt dann bei !HasActiveParent() still aus
+        // und niemand wiederholt es. Ergebnis: die Instanz steht auf Status 102, hat
+        // aber kein Abo und bekommt nie wieder einen Push (auf der Catan C1 an
+        // Gain_Saal verifiziert). Neue Abos setzen CGApplied auf 0, der
+        // FlushPending-Timer baut die Gruppe dann vollstaendig neu auf.
+        $this->SendDataToChildren(json_encode(array(
+            'DataID' => self::IF_TO_CHILD,
+            'Buffer' => array('Resync' => true)
+        )));
     }
 
     public function FlushPending()

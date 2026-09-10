@@ -226,6 +226,17 @@ class QSysRouter extends IPSModule
 
     // ---------------------------------------------------------------- Empfang
 
+    // Meldet das aktuelle Abo erneut an. AddSub im Core ist idempotent, ein
+    // doppelter Aufruf schadet also nicht.
+    private function Resubscribe()
+    {
+        $component = (string) $this->ReadPropertyString('ComponentName');
+        $control = $this->SubControl();
+        if ($component !== '' && $control !== '') {
+            $this->Forward(array('Type' => 'sub', 'Component' => $component, 'Control' => $control));
+        }
+    }
+
     public function ReceiveData($JSONString)
     {
         $data = json_decode($JSONString, true);
@@ -233,6 +244,12 @@ class QSysRouter extends IPSModule
             return;
         }
         $buffer = isset($data['Buffer']) ? $data['Buffer'] : null;
+        // Der Core bittet nach dem Verbindungsaufbau um erneute Anmeldung, weil ein
+        // beim Hochlauf verlorenes Abo sonst nie wiederkaeme.
+        if (is_array($buffer) && isset($buffer['Resync'])) {
+            $this->Resubscribe();
+            return;
+        }
         if (!is_array($buffer) || !isset($buffer['Changes'])) {
             return;
         }

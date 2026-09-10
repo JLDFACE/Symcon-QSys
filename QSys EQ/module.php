@@ -261,6 +261,26 @@ class QSysEQ extends IPSModule
         return is_array($g) ? $g : array();
     }
 
+    // Meldet die aktuellen Abos erneut an. AddSub im Core ist idempotent, ein
+    // doppelter Aufruf schadet also nicht.
+    private function Resubscribe()
+    {
+        $component = (string) $this->ReadPropertyString('ComponentName');
+        if ($component === '') {
+            return;
+        }
+        $bands = (int) $this->ReadPropertyInteger('BandCount');
+        if ($bands < 1) {
+            $bands = (int) $this->GetBuffer('KnownBands');
+        }
+        if ($bands < 1) {
+            $this->Forward(array('Type' => 'rpc', 'Method' => 'Component.GetControls',
+                'Params' => array('Name' => $component)));
+            return;
+        }
+        $this->Subscribe($component, $bands);
+    }
+
     public function ReceiveData($JSONString)
     {
         $data = json_decode($JSONString, true);
@@ -268,6 +288,12 @@ class QSysEQ extends IPSModule
             return;
         }
         $buffer = isset($data['Buffer']) ? $data['Buffer'] : null;
+        // Der Core bittet nach dem Verbindungsaufbau um erneute Anmeldung, weil ein
+        // beim Hochlauf verlorenes Abo sonst nie wiederkaeme.
+        if (is_array($buffer) && isset($buffer['Resync'])) {
+            $this->Resubscribe();
+            return;
+        }
         if (!is_array($buffer) || !isset($buffer['Changes'])) {
             return;
         }
