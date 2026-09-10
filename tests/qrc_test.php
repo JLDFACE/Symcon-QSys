@@ -197,6 +197,32 @@ function newCore()
     return $core;
 }
 
+// Nur die Fan-out-Nachrichten mit Nutzdaten. Der Core schickt den Kindern
+// ausserdem {"Resync":true}, damit sie ihr Abo erneut anmelden -- eine
+// Steuernachricht ohne Changes, die hier nicht mitgezaehlt werden soll.
+function fanouts(QSysCore $core)
+{
+    $out = array();
+    foreach ($core->sentToChildren as $msg) {
+        if (isset($msg['Buffer']['Changes'])) {
+            $out[] = $msg;
+        }
+    }
+    return $out;
+}
+
+// Wurden die Kinder zum erneuten Anmelden aufgefordert?
+function resyncs(QSysCore $core)
+{
+    $n = 0;
+    foreach ($core->sentToChildren as $msg) {
+        if (isset($msg['Buffer']['Resync'])) {
+            $n++;
+        }
+    }
+    return $n;
+}
+
 echo "== QSys Core ==\n";
 
 // --- Test 1: Abo -> AutoPoll-Aufbau auf dem Socket ---
@@ -214,6 +240,7 @@ foreach ($core->sentToParent as $p) {
 }
 check(in_array('ChangeGroup.AddComponentControl', $methods), 'Abo erzeugt ChangeGroup.AddComponentControl');
 check(in_array('ChangeGroup.AutoPoll', $methods), 'Abo aktiviert ChangeGroup.AutoPoll');
+check(resyncs($core) >= 1, 'Aufbau der ChangeGroup fordert die Kinder zum erneuten Anmelden auf');
 
 // --- Test 2: ChangeGroup.Poll -> Fan-out an Kinder, mit Teilframe-Buffering ---
 $core = newCore();
@@ -228,11 +255,12 @@ $poll = frame(array(
 // in zwei Chunks aufteilen (Teilframe muss gepuffert werden)
 $cut = intdiv(strlen($poll), 2);
 rx($core, substr($poll, 0, $cut));
-check(count($core->sentToChildren) === 0, 'Teilframe erzeugt noch keinen Fan-out');
+check(count(fanouts($core)) === 0, 'Teilframe erzeugt noch keinen Fan-out');
 rx($core, substr($poll, $cut));
-check(count($core->sentToChildren) === 1, 'Vollstaendiger Frame erzeugt genau einen Fan-out');
+check(count(fanouts($core)) === 1, 'Vollstaendiger Frame erzeugt genau einen Fan-out');
 
-$changes = $core->sentToChildren[0]['Buffer']['Changes'];
+$f = fanouts($core);
+$changes = $f[0]['Buffer']['Changes'];
 check(count($changes) === 2, 'Zwei Changes weitergereicht');
 check($changes[0]['Component'] === 'MyGain' && $changes[0]['Name'] === 'gain', 'Change 0: Component+Name korrekt');
 check(abs($changes[0]['Value'] - (-6.0)) < 1e-9 && abs($changes[0]['Position'] - 0.5) < 1e-9, 'Change 0: Value+Position korrekt');
@@ -269,14 +297,15 @@ $cget = frame(array(
     )
 ));
 rx($core, $cget);
-check(count($core->sentToChildren) === 1, 'Component.Get erzeugt Fan-out');
-$cg = $core->sentToChildren[0]['Buffer']['Changes'];
+check(count(fanouts($core)) === 1, 'Component.Get erzeugt Fan-out');
+$f = fanouts($core);
+$cg = $f[0]['Buffer']['Changes'];
 check(count($cg) === 2 && $cg[0]['Component'] === 'MyGain', 'Component.Get: Controls mit Component-Namen versehen');
 
 // --- Test 5: zwei Frames in einem Chunk ---
 $core = newCore();
 rx($core, $poll . $status);
-check(count($core->sentToChildren) === 1 && $core->TestGetVar('DesignName') === 'MeinDesign', 'Zwei Frames in einem Chunk werden beide verarbeitet');
+check(count(fanouts($core)) === 1 && $core->TestGetVar('DesignName') === 'MeinDesign', 'Zwei Frames in einem Chunk werden beide verarbeitet');
 
 // --- Test 6: Forward "rpc" -> Socket-Write mit \0 ---
 $core = newCore();
@@ -323,9 +352,10 @@ rx($core, frame(array(
         array('Component' => 'Gain_Saal', 'Name' => 'gain', 'String' => '0dB', 'Value' => 0.0, 'Position' => 1.0)
     ))
 )));
-check(count($core->sentToChildren) === 1, 'ChangeGroup.Poll-Antwort erzeugt Fan-out');
-if (count($core->sentToChildren) === 1) {
-    $ch = $core->sentToChildren[0]['Buffer']['Changes'];
+check(count(fanouts($core)) === 1, 'ChangeGroup.Poll-Antwort erzeugt Fan-out');
+if (count(fanouts($core)) === 1) {
+    $f = fanouts($core);
+    $ch = $f[0]['Buffer']['Changes'];
     check(count($ch) === 1 && $ch[0]['Component'] === 'Gain_Saal' && $ch[0]['Name'] === 'gain',
         'Erst-Sync-Change korrekt normalisiert');
 }
@@ -427,13 +457,15 @@ $pollSel = frame(array('jsonrpc' => '2.0', 'method' => 'ChangeGroup.Poll', 'para
     ))
 )));
 rx($core, $pollSel);
-$ch = $core->sentToChildren[0]['Buffer']['Changes'][0];
+$f = fanouts($core);
+$ch = $f[0]['Buffer']['Changes'][0];
 check(isset($ch['Choices']) && count($ch['Choices']) === 6, 'Core reicht Choices im Fan-out weiter');
 
 // --- ohne Choices bleibt der Change schlank ---
 $core = newCore();
 rx($core, $poll);
-$ch = $core->sentToChildren[0]['Buffer']['Changes'][0];
+$f = fanouts($core);
+$ch = $f[0]['Buffer']['Changes'][0];
 check(!array_key_exists('Choices', $ch), 'Ohne Auswahlliste kein Choices-Feld im Change');
 
 
@@ -457,6 +489,34 @@ foreach ($r->sentToParent as $p) {
     if (isset($p['Buffer']['Type']) && $p['Buffer']['Type'] === 'sub') { $subs++; }
 }
 check($subs > 0, 'Mit Core wird das Abo nachgeholt');
+
+// --- der Fall aus der Anlage: das Kind kommt vor dem Core hoch und wird danach
+//     nie wieder angewendet. Erst der Resync des Cores holt das Abo nach. ---
+$r = new QSysRouter(81);
+$r->hasParent = false;
+$r->Create();
+$r->SetProperty('Mode', 'selector');
+$r->SetProperty('ComponentName', 'Selector_Saal');
+$r->ApplyChanges();                 // Abo geht still verloren, kein Core da
+$r->hasParent = true;
+$r->sentToParent = array();
+$r->ReceiveData(json_encode(array(
+    'DataID' => '{A322AA34-4023-435D-B023-1BD80BAB9E22}',
+    'Buffer' => array('Resync' => true)
+)));
+$subbed = null;
+foreach ($r->sentToParent as $p) {
+    if (isset($p['Buffer']['Type']) && $p['Buffer']['Type'] === 'sub') { $subbed = $p['Buffer']['Control']; }
+}
+check($subbed === 'selector', 'Resync holt das beim Hochlauf verlorene Abo nach');
+
+// Ein Resync darf keine Werte verstellen
+$r->SetValue('Source', 3);
+$r->ReceiveData(json_encode(array(
+    'DataID' => '{A322AA34-4023-435D-B023-1BD80BAB9E22}',
+    'Buffer' => array('Resync' => true)
+)));
+check($r->TestGetVar('Source') === 3, 'Resync laesst die Werte unangetastet');
 
 
 echo "\n== QSys EQ (Filtermathematik) ==\n";

@@ -159,7 +159,7 @@ Component.Get), Change-Normalisierung, ChangeGroup-/AutoPoll-Aufbau und der
 Forward-Pfad, dazu beide Router-Betriebsarten (Router und Selector inkl.
 Aufbau der Quellenliste aus den Choices) und die Filtermathematik des EQ
 (Peaking/Shelf, Summenkurve, Grenzfaelle, analoger Verlauf inkl. der Regression,
-dass ein hohes Band oben nicht zusammenbricht). Stand: **76 Pruefungen, 0 Fehler**.
+dass ein hohes Band oben nicht zusammenbricht). Stand: **79 Pruefungen, 0 Fehler**.
 
 ### Gegen einen echten Core -- lesend
 ```bash
